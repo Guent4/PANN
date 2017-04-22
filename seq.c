@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 #include <float.h>
 #include <time.h>
 
@@ -48,8 +49,13 @@ void printMatrixMatlab(float **matrix, int rows, int columns) {
     printf("----------------------------------------------------------------------\n");
 }
 
-float incrememnt(float val) {
+float increment(float val) {
     return val + 1;
+}
+
+float sigmoid(float val) {
+    float after = (float)((double)1/(double)(1 + exp(-val)));
+    return after;
 }
 
 void createRandomMatrix(int rows, int cols, float ***mat) {
@@ -172,7 +178,8 @@ void initializeMatrices() {
         for (j = 0; j < numRows; j++) {
             W[i][j] = calloc(LAYER_SIZES[i], sizeof(float));
         }
-        matrixElementApply(W[i], numRows, LAYER_SIZES[i], incrememnt);
+
+        matrixElementApply(W[i], numRows, LAYER_SIZES[i], increment);
     }
 }
 
@@ -207,9 +214,13 @@ void feedForward(float ***out) {
 
     printMatrix(X, N, M);
     for (layer = 0; layer < NUM_LAYERS; layer++) {
+        // Multiply Z with W to get S
         int numRows = (layer == 0) ? M : (LAYER_SIZES[layer-1]);
         matrixMatrixMultiply(in, inRows, inCols, W[layer], numRows, LAYER_SIZES[layer], out);
         
+        // Apply activation function to S to get Z
+        matrixElementApply(*out, inRows, LAYER_SIZES[layer], sigmoid);
+
         in = *out;
         inRows = inRows;
         inCols = LAYER_SIZES[layer];
