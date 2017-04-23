@@ -11,8 +11,11 @@
 
 int NUM_LAYERS = 3;
 int *LAYER_SIZES;
+float ETA = 0.5;
+
 float **X;
 float ***W;
+float ***Z;
 float *Y;
 
 void printVector(float *vector, int len) {
@@ -54,8 +57,15 @@ float increment(float val) {
 }
 
 float sigmoid(float val) {
-    float after = (float)((double)1/(double)(1 + exp(-val)));
-    return after;
+    return (float)((double)1/(double)(1 + exp(-val)));
+}
+
+float sigmoidDeriv(float val) {
+    return sigmoid(val) * (1 - sigmoid(val));
+}
+
+float sigmoidDerivWhenAlreadyHaveSigmoid(float val) {
+    return val * (1 - val);
 }
 
 void createRandomMatrix(int rows, int cols, float ***mat) {
@@ -64,6 +74,22 @@ void createRandomMatrix(int rows, int cols, float ***mat) {
     for (i = 0; i < rows; i++) {
         (*mat)[i] = (float *)malloc(cols * sizeof(float));
     }
+}
+
+// Transpose a matrix
+float** transpose(float **input, int num_rows, int num_cols) {
+  int i, j;
+
+  // Allocate the space for the new array
+  float **matrix = (float **)calloc(num_cols, sizeof(float*));
+  for (i = 0; i < num_cols; i++) {
+    matrix[i] = (float *)calloc(num_rows, sizeof(float));
+    for (j = 0; j < num_rows; j++) {
+      matrix[i][j] = input[j][i];
+    }
+  }
+
+  return matrix;
 }
 
 void matrixMatrixMultiply(float **A, int ARows, int ACols, float **B ,int BRows, int BCols, float ***C) {
@@ -90,6 +116,32 @@ void matrixMatrixMultiply(float **A, int ARows, int ACols, float **B ,int BRows,
     }
 }
 
+void matrixMatrixElementMultiply(float **A, float **B, int rows, int cols, float ***C) {
+    int i, j;
+
+    *C = (float **)malloc(rows * sizeof(float *));
+    for (i = 0; i < rows; i++) {
+        (*C)[i] = (float *)malloc(cols * sizeof(float));
+
+        for (j = 0; j < cols; j++) {
+            (*C)[i][j] = A[i][j] * B[i][j];
+        }
+    }
+}
+
+void matrixMatrixElementAdd(float **A, float **B, int rows, int cols, float ***C) {
+    int i, j;
+
+    *C = (float **)malloc(rows * sizeof(float *));
+    for (i = 0; i < rows; i++) {
+        (*C)[i] = (float *)malloc(cols * sizeof(float));
+        
+        for (j = 0; j < cols; j++) {
+            (*C)[i][j] = A[i][j] + B[i][j];
+        }
+    }
+}
+
 void matrixElementApply(float **A, int rows, int cols, float(*f)(float)) {
     int i, j;
 
@@ -97,6 +149,16 @@ void matrixElementApply(float **A, int rows, int cols, float(*f)(float)) {
         for (j = 0; j < cols; j++) {
             A[i][j] = f(A[i][j]);
         }
+    }
+}
+
+void matrixVectorSubtraction(float **matrix, int rows, float *vector, float ***result) {
+    int i;
+
+    *result = (float **)malloc(rows * sizeof(float **));
+    for (i = 0; i < rows; i++) {
+        (*result)[i] = (float *)malloc(sizeof(float));
+        (*result)[i][0] = matrix[i][0] - vector[i];
     }
 }
 
@@ -152,7 +214,6 @@ void readInXY(int starting, int ending) {
     // printVector(Y, N);
     // printMatrix(X, N, M);
     printMatrixMatlab(X, N, M);
-
 }
 
 void initializeMatrices() {
@@ -176,10 +237,19 @@ void initializeMatrices() {
         int numRows = (i == 0) ? M : LAYER_SIZES[i-1];
         W[i] = (float **)malloc(numRows * sizeof(float *));
         for (j = 0; j < numRows; j++) {
-            W[i][j] = calloc(LAYER_SIZES[i], sizeof(float));
+            W[i][j] = (float *)calloc(LAYER_SIZES[i], sizeof(float));
         }
 
         matrixElementApply(W[i], numRows, LAYER_SIZES[i], increment);
+    }
+
+    // Create S matrices
+    Z = (float ***)malloc((NUM_LAYERS - 1) * sizeof(float ***));
+    for (i = 0; i < NUM_LAYERS - 1; i++) {
+        Z[i] = (float **)malloc(N * sizeof(float *));
+        for (j = 0; j < N; j++) {
+            Z[i][j] = (float *)calloc(LAYER_SIZES[i], sizeof(float));
+        }
     }
 }
 
@@ -195,7 +265,7 @@ void freeMatrices() {
     // Free Y
     free(Y);
 
-    // Free weights metrix
+    // Free weights matrix
     for (i = 0; i < NUM_LAYERS; i++) {
         for (j = 0; j < M; j++) {
             free(W[i][j]);
@@ -203,6 +273,15 @@ void freeMatrices() {
         free(W[i]);
     }
     free(W);
+
+    // Free S matrix
+    for (i = 0; i < NUM_LAYERS - 1; i++) {
+        for (j = 0; j < N; j++) {
+            free(Z[i][j]);
+        }
+        free(Z[i]);
+    }
+    free(Z);
 }
 
 void feedForward(float ***out) {
@@ -218,12 +297,61 @@ void feedForward(float ***out) {
         int numRows = (layer == 0) ? M : (LAYER_SIZES[layer-1]);
         matrixMatrixMultiply(in, inRows, inCols, W[layer], numRows, LAYER_SIZES[layer], out);
         
+        // Note that the output perceptrons do not have activation function
+        if (layer == NUM_LAYERS - 1) break;
+
         // Apply activation function to S to get Z
         matrixElementApply(*out, inRows, LAYER_SIZES[layer], sigmoid);
 
+        // Save Z because this is sigmoid(S) and is needed in back propagation
+        Z[layer] = *out;
+        
+        // Update values for next iteration
         in = *out;
         inRows = inRows;
         inCols = LAYER_SIZES[layer];
+    }
+}
+
+void backPropagation(float** estimation) {
+    int layer;
+
+    // Calculate the derivative of all S matrices
+    for (layer = 0; layer < NUM_LAYERS - 1; layer++) {
+        matrixElementApply(Z[layer], N, LAYER_SIZES[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
+    }
+
+    // Get the error
+    float **delta;
+    matrixVectorSubtraction(estimation, N, Y, &delta);
+
+    // Start propagating back to obtain deltas
+    int deltaRows = N;
+    int deltaCols = 1;
+    int wRows = 1;
+    int wCols = LAYER_SIZES[NUM_LAYERS - 2];
+
+    float **transW;
+    float **deltaW;
+    for (layer = 0; layer < NUM_LAYERS - 1; layer++) {
+        // Transpose W to multiply with delta
+        transW = transpose(W[NUM_LAYERS - 1 - layer], wCols, wRows);
+        matrixMatrixMultiply(delta, deltaRows, deltaCols, transW, wRows, wCols, &deltaW);
+
+        // Element wise multiplication between deltaW and derivative of S
+        matrixMatrixElementMultiply(deltaW, Z[NUM_LAYERS - 2 - layer], deltaRows, wCols, &delta);
+
+        printMatrix(delta, deltaRows, wCols);
+
+        // Free the temp arrays
+        free(deltaW);
+        free(transW);
+
+        // Update matrix dimensions
+        deltaRows = N;
+        deltaCols = wCols;
+        wRows = wCols;
+        wCols = LAYER_SIZES[NUM_LAYERS - 3 - layer];
     }
 }
 
@@ -234,9 +362,11 @@ int main(int argc, char** argv) {
     LAYER_SIZES[2] = 1;
 
 	initializeMatrices();
+    printVector(Y, N);
 
     float **out;
     feedForward(&out);
+    backPropagation(out);
 
     freeMatrices();
 
