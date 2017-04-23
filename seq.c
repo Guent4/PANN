@@ -56,6 +56,10 @@ float increment(float val) {
     return val + 1;
 }
 
+float multiplyByEta(float val) {
+    return -val * ETA;
+}
+
 float sigmoid(float val) {
     return (float)((double)1/(double)(1 + exp(-val)));
 }
@@ -291,7 +295,6 @@ void feedForward(float ***out) {
     int inRows = N;
     int inCols = M;
 
-    printMatrix(X, N, M);
     for (layer = 0; layer < NUM_LAYERS; layer++) {
         // Multiply Z with W to get S
         int numRows = (layer == 0) ? M : (LAYER_SIZES[layer-1]);
@@ -314,7 +317,7 @@ void feedForward(float ***out) {
 }
 
 void backPropagation(float** estimation) {
-    int layer;
+    int layer, i;
 
     // Calculate the derivative of all S matrices
     for (layer = 0; layer < NUM_LAYERS - 1; layer++) {
@@ -333,25 +336,62 @@ void backPropagation(float** estimation) {
 
     float **transW;
     float **deltaW;
-    for (layer = 0; layer < NUM_LAYERS - 1; layer++) {
+    float **wUpdates;
+    for (layer = NUM_LAYERS - 2; layer >= 0; layer--) {
         // Transpose W to multiply with delta
-        transW = transpose(W[NUM_LAYERS - 1 - layer], wCols, wRows);
+        transW = transpose(W[layer + 1], wCols, wRows);
         matrixMatrixMultiply(delta, deltaRows, deltaCols, transW, wRows, wCols, &deltaW);
 
         // Element wise multiplication between deltaW and derivative of S
-        matrixMatrixElementMultiply(deltaW, Z[NUM_LAYERS - 2 - layer], deltaRows, wCols, &delta);
+        matrixMatrixElementMultiply(deltaW, Z[layer], deltaRows, wCols, &delta);
 
-        printMatrix(delta, deltaRows, wCols);
+        // Calculate the weight updates
+        if (layer >= 1) {
+            // Calculate how much the weights need to be updated by
 
-        // Free the temp arrays
+            // First transpose Z
+            int transposedZRows = LAYER_SIZES[layer - 1];
+            int transposedZCols = deltaRows;
+            float** transposedZ = transpose(Z[layer - 1], transposedZCols, transposedZRows);
+
+            // Now multiply Z with D
+            matrixMatrixMultiply(transposedZ, transposedZRows, transposedZCols, delta, deltaRows, wCols, &wUpdates);
+            int wUpdatesRows = transposedZRows;
+            int wUpdatesCols = wCols;
+
+            // Multiply by -eta
+            matrixElementApply(wUpdates, wUpdatesRows, wUpdatesCols, multiplyByEta);
+            printMatrix(wUpdates, wUpdatesRows, wUpdatesCols);
+
+            // Calculated how much to update by.  Now apply to W to update
+            matrixMatrixElementAdd(wUpdates, W[layer], wUpdatesRows, wUpdatesCols, &W[layer]);
+
+            // Free up temp matrices
+            for (i = 0; i < transposedZRows; i++) {
+                free(transposedZ[i]);
+            }
+            free(transposedZ);
+            for (i = 0; i < wUpdatesRows; i++) {
+                free(wUpdates[i]);
+            }
+            free(wUpdates);
+        }
+
+        // Free the temp matrices
+        for (i = 0; i < deltaRows; i++) {
+            free(deltaW[i]);
+        }
         free(deltaW);
+        for (i = 0; i < wRows; i++) {
+            free(transW[i]);
+        }
         free(transW);
 
         // Update matrix dimensions
         deltaRows = N;
         deltaCols = wCols;
         wRows = wCols;
-        wCols = LAYER_SIZES[NUM_LAYERS - 3 - layer];
+        wCols = LAYER_SIZES[layer - 1];
     }
 }
 
