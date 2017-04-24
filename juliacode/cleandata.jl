@@ -70,3 +70,51 @@ function makeWhatMattersToMeGraph(df)
 	savefig("figures/WhatYouLookForInOpSex.pdf")
 	
 end
+
+function compareAttractiveness(df)
+	selfrates = df[:attr3_1]
+
+end
+
+function plotMatching(df)
+	all_ids = df[:iid]
+	num_rows, num_cols = size(df)
+	results = zeros(maximum(all_ids), maximum(all_ids))
+	waves = collect(1:21)
+	lower = 1
+	upper = 1
+	processed = 0
+	for currwave in waves
+		close("all")
+		figure(figsize=[20,20])
+		waveids = (df[df[:wave].==currwave,:iid])
+		num_rows_in_wave = size(waveids,1)
+		waveids = unique(waveids)
+		num_in_wave = size(waveids,1)
+		results = zeros(num_in_wave, num_in_wave)
+		upper = lower+num_rows_in_wave
+		@show lower, upper
+		for k in collect(lower:upper)
+			for j in collect(lower:upper)
+				#@show idx1, idx2
+				my_id_1= df[:iid][j]
+				partner_id_1 = df[:pid][j]
+				my_id_2= df[:iid][k]
+				partner_id_2 = df[:pid][k]
+				if(my_id_1==partner_id_2) #if person one is talking to person 2
+					if((df[:dec][j]==df[:dec][k])&& df[:dec][j]==1) #we have a match
+						@show my_id_1-processed, my_id_2-processed, num_in_wave
+						results[my_id_1-processed, my_id_2-processed]=1
+						@printf("found match between %i and %i in wave %i\n", my_id_1, my_id_2, currwave)
+					end
+				end
+
+			end
+		end
+	lower = lower+num_rows_in_wave
+	processed = processed + num_in_wave
+	pcolormesh(results)
+	savefig(string("../figures/MatchesInWave", currwave, ".pdf"))
+	end
+	return results		
+end
