@@ -1,16 +1,47 @@
 using DataFrames #to read in data
 using PyPlot #to plot data
 
-#df =  readtable("../dating/data.csv")
-#showcols(df) #lets us see a summary showing missing data
+df =  readtable("../dating/data.csv")
+showcols(df) #lets us see a summary showing missing data
 
 function fillInNan(df)
 	num_people, num_cols = size(df)
+	threshold_percent = .55
+	threshold = threshold_percent*num_people
+	types=eltypes(df)
+	j = 1
+	while(j<num_cols)
+		num_NA = size(df[isna(df[j]),j],1)
+		@show num_NA
+		if(num_NA<threshold)
+			delete!(df, j)
+			num_cols = num_cols -1	
+		end
+		j = j+1
+	end
+	@show size(df)
+	num_people, num_cols = size(df)
 	types=eltypes(df)
 	for j in collect(1:num_cols)
+		@show j, types[j]
 		curr_col = df[!isna(df[j]),j] #get data with NAs removed
+		@show curr_col
 		if(types[j]==Float64)
-			fill_val = mean(curr_col) #calculate the mean
+			if(typeof(curr_col[1])==Float64)
+				fill_val = mean(curr_col) #calculate the mean
+			elseif(typeof(curr_col[1])==Int64)
+				fill_val=Int(round(mean(curr_col)))
+			else
+				temp = Float64[]
+				for k in size(curr_col,1)
+					@show replace(curr_col[k], ",", "")
+					t= parse(Float64, replace(curr_col[k], ",", ""))
+					@show t, typeof(t)
+					push!(temp, t)
+				end
+				@show temp
+				fill_val = string(mean(temp))
+			end
 			df[isna(df[j]),j]=fill_val #fill NAs with mean value
 		elseif(types[j]==Int64)
 			fill_val = mean(curr_col) #calculate the mean
@@ -84,6 +115,8 @@ function plotMatching(df)
 	lower = 1
 	upper = 1
 	processed = 0
+	#white = no data, 
+	#dark red match, light red one person interested, orange, no one interested
 	for currwave in waves
 		close("all")
 		figure(figsize=[20,20])
@@ -91,21 +124,24 @@ function plotMatching(df)
 		num_rows_in_wave = size(waveids,1)
 		waveids = unique(waveids)
 		num_in_wave = size(waveids,1)
-		results = zeros(num_in_wave, num_in_wave)
+		results = fill(-1.0,num_in_wave+1, num_in_wave+1)
 		upper = lower+num_rows_in_wave
 		@show lower, upper
 		for k in collect(lower:upper)
 			for j in collect(lower:upper)
-				#@show idx1, idx2
 				my_id_1= df[:iid][j]
 				partner_id_1 = df[:pid][j]
 				my_id_2= df[:iid][k]
 				partner_id_2 = df[:pid][k]
 				if(my_id_1==partner_id_2) #if person one is talking to person 2
 					if((df[:dec][j]==df[:dec][k])&& df[:dec][j]==1) #we have a match
-						@show my_id_1-processed, my_id_2-processed, num_in_wave
+						@show my_id_1-processed, my_id_2-processed, num_in_wave, processed
 						results[my_id_1-processed, my_id_2-processed]=1
 						@printf("found match between %i and %i in wave %i\n", my_id_1, my_id_2, currwave)
+					elseif(df[:dec][j]==1 && df[:dec][k]==0 ||(df[:dec][k]==1 && df[:dec][j]==0))
+						results[my_id_1-processed, my_id_2-processed] = .5 #unrequited match
+					elseif((df[:dec][j]==df[:dec][k])&& df[:dec][j]==0) #mutal unattraction 
+						results[my_id_1-processed, my_id_2-processed]=0.0
 					end
 				end
 
@@ -113,7 +149,8 @@ function plotMatching(df)
 		end
 	lower = lower+num_rows_in_wave
 	processed = processed + num_in_wave
-	pcolormesh(results)
+	pcolormesh(results, cmap = "Reds")
+	#axis([0,num_in_wave+1, 0, num_in_wave+1])
 	savefig(string("../figures/MatchesInWave", currwave, ".pdf"))
 	end
 	return results		
