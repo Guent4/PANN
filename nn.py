@@ -2,6 +2,8 @@ from math import exp
 from random import seed
 from random import random
 
+#http://machinelearningmastery.com/implement-backpropagation-algorithm-scratch-python/
+
 # Initialize a network
 def initialize_network(n_inputs, n_hidden, n_outputs):
 	network = list()
@@ -43,16 +45,19 @@ def backward_propagate_error(network, expected):
 	for i in reversed(range(len(network))):
 		layer = network[i]
 		errors = list()
+		print(layer)
 		if i != len(network)-1:
 			for j in range(len(layer)):
 				error = 0.0
 				for neuron in network[i + 1]:
+					print(neuron)
 					error += (neuron['weights'][j] * neuron['delta'])
 				errors.append(error)
 		else:
 			for j in range(len(layer)):
 				neuron = layer[j]
 				errors.append(expected[j] - neuron['output'])
+		print(errors)
 		for j in range(len(layer)):
 			neuron = layer[j]
 			neuron['delta'] = errors[j] * transfer_derivative(neuron['output'])
@@ -77,6 +82,7 @@ def train_network(network, train, l_rate, n_epoch, n_outputs):
 			expected = [0 for i in range(n_outputs)]
 			expected[row[-1]] = 1
 			sum_error += sum([(expected[i]-outputs[i])**2 for i in range(len(expected))])
+			print("sum error", sum_error)
 			backward_propagate_error(network, expected)
 			update_weights(network, row, l_rate)
 		print('>epoch=%d, lrate=%.3f, error=%.3f' % (epoch, l_rate, sum_error))
@@ -96,6 +102,6 @@ dataset = [[2.7810836,2.550537003,0],
 n_inputs = len(dataset[0]) - 1
 n_outputs = len(set([row[-1] for row in dataset]))
 network = initialize_network(n_inputs, 2, n_outputs)
-train_network(network, dataset, 0.5, 20, n_outputs)
+train_network(network, dataset, 0.5, 1, n_outputs)
 for layer in network:
 	print(layer)
