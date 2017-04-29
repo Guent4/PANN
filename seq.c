@@ -58,8 +58,12 @@ void printMatrixMatlab(Matrix *matrix) {
     printf("----------------------------------------------------------------------\n");
 }
 
-float increment(float val) {
+float incrementBy1(float val) {
     return val + 1;
+}
+
+float incrementByRand(float val) {
+    return val + (float)rand()/(RAND_MAX);
 }
 
 float multiplyByEta(float val) {
@@ -136,6 +140,58 @@ void matrixMatrixMultiply(Matrix *A, Matrix *B, Matrix *C) {
     }
 }
 
+void matrixElementApply(Matrix *A, float(*f)(float)) {
+    int i, j;
+
+    for (i = 0; i < A->rows; i++) {
+        for (j = 0; j < A->cols; j++) {
+            A->m[i][j] = f(A->m[i][j]);
+        }
+    }
+}
+
+void matrixMatrixElementAdd(Matrix *A, Matrix *B, Matrix *C) {
+    if (A->rows != B->rows || A->cols != B->cols) {
+        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementAdd\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
+
+    int i, j;
+
+    float **matrix = (float **)malloc(A->rows * sizeof(float *));
+    for (i = 0; i < B->rows; i++) {
+        matrix[i] = (float *)malloc(A->cols * sizeof(float));
+        
+        for (j = 0; j < A->cols; j++) {
+            matrix[i][j] = A->m[i][j] + B->m[i][j];
+        }
+    }
+    C->m = matrix;
+    C->rows = A->rows;
+    C->cols = A->cols;
+}
+
+void matrixMatrixElementSub(Matrix *A, Matrix *B, Matrix *C) {
+    if (A->rows != B->rows || A->cols != B->cols) {
+        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementSub\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
+
+    int i, j;
+
+    float **matrix = (float **)malloc(A->rows * sizeof(float *));
+    for (i = 0; i < B->rows; i++) {
+        matrix[i] = (float *)malloc(A->cols * sizeof(float));
+        
+        for (j = 0; j < A->cols; j++) {
+            matrix[i][j] = A->m[i][j] - B->m[i][j];
+        }
+    }
+    C->m = matrix;
+    C->rows = A->rows;
+    C->cols = A->cols;
+}
+
 void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
     if (A->rows != B->rows || A->cols != B->cols) {
         printf("Dimension mismatch: %dx%d %dx%d - matrixMatrixElementMultiply\n", A->rows, A->cols, B->rows, B->cols);
@@ -158,56 +214,6 @@ void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
     C->cols = A->cols;
 }
 
-void matrixMatrixElementAdd(Matrix *A, Matrix *B, Matrix *matrix) {
-    if (A->rows != B->rows || A->cols != B->cols) {
-        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementAdd\n", A->rows, A->cols, B->rows, B->cols);
-        exit(1);
-    }
-
-    int i, j;
-
-    matrix->m = (float **)malloc(A->rows * sizeof(float *));
-    for (i = 0; i < B->rows; i++) {
-        matrix->m[i] = (float *)malloc(A->cols * sizeof(float));
-        
-        for (j = 0; j < A->cols; j++) {
-            matrix->m[i][j] = A->m[i][j] + B->m[i][j];
-        }
-    }
-    matrix->rows = A->rows;
-    matrix->cols = A->cols;
-}
-
-void matrixElementApply(Matrix *A, float(*f)(float)) {
-    int i, j;
-
-    for (i = 0; i < A->rows; i++) {
-        for (j = 0; j < A->cols; j++) {
-            A->m[i][j] = f(A->m[i][j]);
-        }
-    }
-}
-
-void matrixMatrixElementSub(Matrix *A, Matrix *B, Matrix *matrix) {
-    if (A->rows != B->rows || A->cols != B->cols) {
-        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementSub\n", A->rows, A->cols, B->rows, B->cols);
-        exit(1);
-    }
-
-    int i, j;
-
-    matrix->m = (float **)malloc(A->rows * sizeof(float *));
-    for (i = 0; i < B->rows; i++) {
-        matrix->m[i] = (float *)malloc(A->cols * sizeof(float));
-        
-        for (j = 0; j < A->cols; j++) {
-            matrix->m[i][j] = A->m[i][j] - B->m[i][j];
-        }
-    }
-    matrix->rows = A->rows;
-    matrix->cols = A->cols;
-}
-
 float getfield(char* line, int num) {
     const char* tok;
     for (tok = strtok(line, ";"); tok && *tok; tok = strtok(NULL, ";\n")) {
@@ -221,7 +227,7 @@ float getfield(char* line, int num) {
     exit(1);
 }
 
-// Starting is included; ending is not
+// starting is included; ending is not
 void readInXY(int starting, int ending) {
     char buffer[2048];
     char *record, *line;
@@ -299,8 +305,16 @@ void initializeMatrices() {
         matrix->m = w;
         WTS[i] = matrix;
 
-        matrixElementApply(WTS[i], increment);
+        // The in->firstHidden and lastHidden->out have weights of 1
+        if (i == 0 || i == NUM_LAYERS-1) {
+            matrixElementApply(WTS[i], incrementBy1);
+        } else {
+            matrixElementApply(WTS[i], incrementByRand);
+        }
+        printf("WEIGHT %d\n", i);
+        printMatrixMatlab(matrix);
     }
+    printf("\n\n\n");
 
     // Create S matrices
     ZTS = (Matrix **)malloc((NUM_LAYERS - 1) * sizeof(Matrix **));
@@ -381,16 +395,11 @@ void feedForward(Matrix *out) {
 void backPropagation(Matrix *estimation) {
     int layer, i;
 
-    // Calculate the derivative of all S matrices
-    for (layer = 0; layer < NUM_LAYERS - 1; layer++) {
-        matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
-    }
-
     // Get the error
     Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
     matrixMatrixElementSub(estimation, YTS, delta);
 
-    printMatrix(delta);
+    // printMatrix(delta);
 
     for (layer = NUM_LAYERS - 2; layer >= 0; layer--) {
         // Transpose W to multiply with delta
@@ -401,15 +410,20 @@ void backPropagation(Matrix *estimation) {
         matrixMatrixMultiply(delta, transW, deltaW);
 
         // Element wise multiplication between deltaW and derivative of S
+        matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
         matrixMatrixElementMultiply(deltaW, ZTS[layer], delta);
 
         // Calculate the weight updates
-        if (layer >= 1) {
+        if (layer != 0) {
             // Calculate how much the weights need to be updated by
+            printf("Update\n");
 
             // First transpose Z
             Matrix *transposedZ = (Matrix *)malloc(sizeof(Matrix));
             transpose(ZTS[layer - 1], transposedZ);
+
+            printMatrix(ZTS[layer-1]);
+            printMatrix(delta);
 
             // Now multiply Z with D
             Matrix *wUpdates = (Matrix *)malloc(sizeof(Matrix));
@@ -420,7 +434,10 @@ void backPropagation(Matrix *estimation) {
             printMatrix(wUpdates);
 
             // Calculated how much to update by.  Now apply to W to update
+            printMatrix(WTS[layer]);
+            printMatrix(wUpdates);
             matrixMatrixElementAdd(WTS[layer], wUpdates, WTS[layer]);
+            printMatrix(WTS[layer]);
 
             // Free up temp matrices
             freeMatrix(transposedZ);
@@ -430,6 +447,8 @@ void backPropagation(Matrix *estimation) {
         // Free temp matrices
         freeMatrix(transW);
         freeMatrix(deltaW); 
+
+        printf("\n\n\n");
     }
 
     // Free temporary matrices
@@ -447,6 +466,12 @@ int main(int argc, char** argv) {
     Matrix *out = (Matrix *)malloc(sizeof(Matrix));
     feedForward(out);
     backPropagation(out);
+
+    printf("\n\n\n");
+    int i;
+    for (i = 0; i < NUM_LAYERS; i++) {
+        printMatrix(WTS[i]);
+    }
 
     freeMatrices();
 
