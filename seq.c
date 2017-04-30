@@ -6,15 +6,15 @@
 #include <float.h>
 #include <time.h>
 
-#define N 10
-#define M 11
-
 typedef struct {
     int rows;
     int cols;
     float **m;
 } Matrix;
 
+int TOTAL = 8200;
+int N = 2000;
+int FEATURES = 11;
 int NUM_LAYERS = 3;
 int *LAYER_SIZES;
 float ETA = 0.5;
@@ -214,6 +214,19 @@ void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
     C->cols = A->cols;
 }
 
+float matrixReduceSquared(Matrix *A) {
+    float sum = 0.0;
+    
+    int i, j;
+    for (i = 0; i < A->rows; i++) {
+        for (j = 0; j < A->cols; j++) {
+            sum += A->m[i][j];
+        }
+    }
+
+    return sum;
+}
+
 float getfield(char* line, int num) {
     const char* tok;
     for (tok = strtok(line, ";"); tok && *tok; tok = strtok(NULL, ";\n")) {
@@ -228,12 +241,13 @@ float getfield(char* line, int num) {
 }
 
 // starting is included; ending is not
-void readInXY(int starting, int ending) {
+void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
     char buffer[2048];
     char *record, *line;
     int i, j;
 
-	FILE* fstream = fopen("./dating/temp.csv", "r");
+
+    FILE* fstream = fopen("./dating/temp.csv", "r");
     
     if (fstream == NULL) {
         printf("\n file opening failed ");
@@ -250,9 +264,9 @@ void readInXY(int starting, int ending) {
             j = 0;
             while (record != NULL) {
                 if (j == 0) {
-                    YTS->m[i][0] = atof(record);
+                    outputs->m[i-starting][0] = atof(record);
                 } else {
-                    XTS->m[i][j-1] = atof(record);
+                    inputs->m[i-starting][j-1] = atof(record);
                 }
 
                 j++;
@@ -263,7 +277,7 @@ void readInXY(int starting, int ending) {
         i++;
     }
 
-    printMatrixMatlab(XTS);
+    // printMatrixMatlab(XTS);
 }
 
 void initializeMatrices() {
@@ -273,10 +287,10 @@ void initializeMatrices() {
     XTS = (Matrix *)malloc(sizeof(Matrix));
 	XTS->m = (float **)malloc(N * sizeof(float *));
 	for (i = 0; i < N; i++) {
-		XTS->m[i] = (float *)malloc(M * sizeof(float));
+		XTS->m[i] = (float *)malloc(FEATURES * sizeof(float));
 	}
     XTS->rows = N;
-    XTS->cols = M;
+    XTS->cols = FEATURES;
 
 	// Create output
     YTS = (Matrix *)malloc(sizeof(Matrix));
@@ -288,12 +302,12 @@ void initializeMatrices() {
     YTS->cols = 1;
 
     // Retrieve data from csv
-    readInXY(0, 10);
+    readInXY(0, N, XTS, YTS);
 
     // Create weight matrices
     WTS = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix **));
     for (i = 0; i < NUM_LAYERS; i++) {
-        int numRows = (i == 0) ? M : LAYER_SIZES[i-1];
+        int numRows = (i == 0) ? FEATURES : LAYER_SIZES[i-1];
         float **w = (float **)malloc(numRows * sizeof(float *));
         for (j = 0; j < numRows; j++) {
             w[j] = (float *)calloc(LAYER_SIZES[i], sizeof(float));
@@ -311,10 +325,10 @@ void initializeMatrices() {
         } else {
             matrixElementApply(WTS[i], incrementByRand);
         }
-        printf("WEIGHT %d\n", i);
-        printMatrixMatlab(matrix);
+        // printf("WEIGHT %d\n", i);
+        // printMatrixMatlab(matrix);
     }
-    printf("\n\n\n");
+    // printf("\n\n\n");
 
     // Create S matrices
     ZTS = (Matrix **)malloc((NUM_LAYERS - 1) * sizeof(Matrix **));
@@ -361,16 +375,15 @@ void freeMatrices() {
     free(ZTS);
 }
 
-void feedForward(Matrix *out) {
+void feedForward(Matrix *in, Matrix *out) {
     int layer;
-    Matrix *in = XTS;
     Matrix *z;
 
     for (layer = 0; layer < NUM_LAYERS; layer++) {
         // Multiply Z with W to get S
         z = (Matrix *)malloc(sizeof(Matrix));
         matrixMatrixMultiply(in, WTS[layer], z);
-        
+
         // Note that the output perceptrons do not have activation function
         if (layer == NUM_LAYERS - 1) break;
 
@@ -416,14 +429,14 @@ void backPropagation(Matrix *estimation) {
         // Calculate the weight updates
         if (layer != 0) {
             // Calculate how much the weights need to be updated by
-            printf("Update\n");
 
             // First transpose Z
             Matrix *transposedZ = (Matrix *)malloc(sizeof(Matrix));
             transpose(ZTS[layer - 1], transposedZ);
 
-            printMatrix(ZTS[layer-1]);
-            printMatrix(delta);
+            // printf("Update\n");
+            // printMatrix(ZTS[layer-1]);
+            // printMatrix(delta);
 
             // Now multiply Z with D
             Matrix *wUpdates = (Matrix *)malloc(sizeof(Matrix));
@@ -431,13 +444,13 @@ void backPropagation(Matrix *estimation) {
 
             // Multiply by -eta
             matrixElementApply(wUpdates, multiplyByEta);
-            printMatrix(wUpdates);
+            // printMatrix(wUpdates);
 
             // Calculated how much to update by.  Now apply to W to update
-            printMatrix(WTS[layer]);
-            printMatrix(wUpdates);
+            // printMatrix(WTS[layer]);
+            // printMatrix(wUpdates);
             matrixMatrixElementAdd(WTS[layer], wUpdates, WTS[layer]);
-            printMatrix(WTS[layer]);
+            // printMatrix(WTS[layer]);
 
             // Free up temp matrices
             freeMatrix(transposedZ);
@@ -448,11 +461,51 @@ void backPropagation(Matrix *estimation) {
         freeMatrix(transW);
         freeMatrix(deltaW); 
 
-        printf("\n\n\n");
+        // printf("\n\n\n");
     }
 
     // Free temporary matrices
     freeMatrix(delta);
+}
+
+void testAccuracy(int testSize) {
+    int i, j;
+
+    // Get test data
+    Matrix *testX = (Matrix *)malloc(sizeof(Matrix));
+    testX->m = (float **)malloc(testSize * sizeof(float *));
+    for (i = 0; i < testSize; i++) {
+        testX->m[i] = (float *)malloc(FEATURES * sizeof(float));
+    }
+    testX->rows = testSize;
+    testX->cols = FEATURES;
+
+    Matrix *testY = (Matrix *)malloc(sizeof(Matrix));
+    testY->m = (float **)malloc(testSize * sizeof(float *));
+    for (i = 0; i < testSize; i++) {
+        testY->m[i] = (float *)malloc(sizeof(float));
+    }
+    testY->rows = testSize;
+    testY->cols = 1;
+
+    // Retrieve test data from csv
+    readInXY(TOTAL-testSize, TOTAL, testX, testY);
+
+    // Get the output
+    Matrix *testOut = (Matrix *)malloc(sizeof(Matrix));
+    feedForward(testX, testOut);
+
+    // Get the error
+    Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
+    matrixMatrixElementSub(testOut, testY, delta);
+
+    float error = matrixReduceSquared(delta);
+    printf("Error: %f\n", error);
+
+    freeMatrix(delta);
+    freeMatrix(testOut);
+    freeMatrix(testY);
+    freeMatrix(testX);
 }
 
 int main(int argc, char** argv) {
@@ -461,16 +514,19 @@ int main(int argc, char** argv) {
     LAYER_SIZES[1] = 15;
     LAYER_SIZES[2] = 1;
 
-	initializeMatrices();
+    initializeMatrices();
+    testAccuracy(100);
 
     Matrix *out = (Matrix *)malloc(sizeof(Matrix));
-    feedForward(out);
+    feedForward(XTS, out);
     backPropagation(out);
 
-    printf("\n\n\n");
+    testAccuracy(100);
+
+    // printf("\n\n\n");
     int i;
     for (i = 0; i < NUM_LAYERS; i++) {
-        printMatrix(WTS[i]);
+        // printMatrix(WTS[i]);
     }
 
     freeMatrices();
