@@ -13,7 +13,7 @@ typedef struct {
 } Matrix;
 
 int TOTAL = 8200;
-int N = 2000;
+int N;
 int FEATURES = 11;
 int NUM_LAYERS = 3;
 int *LAYER_SIZES;
@@ -220,7 +220,7 @@ float matrixReduceSquared(Matrix *A) {
     int i, j;
     for (i = 0; i < A->rows; i++) {
         for (j = 0; j < A->cols; j++) {
-            sum += A->m[i][j];
+            sum += pow(A->m[i][j], 2);
         }
     }
 
@@ -256,7 +256,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
 
     i = -1;     // Starts at -1 to account for row of column headers
     while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL) {
-        // Only include interested N
+        // Only include interested
         if (i >= starting && i < ending) {
             record = strtok(line, ",");
             
@@ -300,9 +300,6 @@ void initializeMatrices() {
     }
     YTS->rows = N;
     YTS->cols = 1;
-
-    // Retrieve data from csv
-    readInXY(0, N, XTS, YTS);
 
     // Create weight matrices
     WTS = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix **));
@@ -509,24 +506,31 @@ void testAccuracy(int testSize) {
 }
 
 int main(int argc, char** argv) {
+    N = 2;
+
     LAYER_SIZES = (int *)malloc(NUM_LAYERS * sizeof(int));
-    LAYER_SIZES[0] = N;
-    LAYER_SIZES[1] = 15;
+    LAYER_SIZES[0] = 10;
+    LAYER_SIZES[1] = 1;
     LAYER_SIZES[2] = 1;
 
     initializeMatrices();
     testAccuracy(100);
+    // printMatrix(WTS[1]);
 
-    Matrix *out = (Matrix *)malloc(sizeof(Matrix));
-    feedForward(XTS, out);
-    backPropagation(out);
+    int iter;
+    for (iter = 0; iter < 100; iter++) {
+        // Retrieve data from csv
+        readInXY(iter*N, iter*N + N, XTS, YTS);
 
-    testAccuracy(100);
+        Matrix *out = (Matrix *)malloc(sizeof(Matrix));
+        feedForward(XTS, out);
+        backPropagation(out);
 
-    // printf("\n\n\n");
-    int i;
-    for (i = 0; i < NUM_LAYERS; i++) {
-        // printMatrix(WTS[i]);
+        // printf("\n\n\n");
+        testAccuracy(100);
+        // printMatrix(WTS[1]);
+
+        freeMatrix(out);
     }
 
     freeMatrices();
