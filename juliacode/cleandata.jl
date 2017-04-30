@@ -10,15 +10,30 @@ function fillInNan(df)
 	threshold_percent = .55
 	threshold = threshold_percent*num_people
 	j = 1
+	toDelete =Int64[]
 	while(j<num_cols)
 		num_NA = size(df[isna(df[j]),j],1)
-		@show num_NA
+		#@show num_NA
 		if(num_NA>threshold)
-			delete!(df, j)
-			num_cols = num_cols -1	
+			push!(toDelete, j);
+			#num_cols = num_cols -1	
 		end
 		j = j+1
 	end
+	delete!(df, toDelete);
+	j = 1
+	types=eltypes(df)
+	toDelete =Int64[]
+	num_people, num_cols = size(df)
+	while(j<num_cols)
+		#@show j, types[j]
+		if(types[j]==String)
+			#delete!(df,j);
+			push!(toDelete, j);
+		end
+		j = j+1
+	end
+	delete!(df, toDelete);
 	@show size(df)
 	num_people, num_cols = size(df)
 	types=eltypes(df)
@@ -47,8 +62,17 @@ function fillInNan(df)
 			df[isna(df[j]),j]=Int(round(fill_val)) #fill NAs with rounded mean value
 		end
 	end
-	#@show df
-	#writetable("../dating/cleanedData.csv",df)
+	#remove id number data
+	delete!(df, :id);
+	delete!(df, :iid);
+	delete!(df, :idg);
+	delete!(df, :position);
+	delete!(df, :positin1);
+	delete!(df, :order);
+	delete!(df, :partner);
+	delete!(df, :pid);
+	@show showcols(df)
+	writetable("../dating/cleanedData.csv",df)
 	return df
 end
 
