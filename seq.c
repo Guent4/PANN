@@ -1,3 +1,7 @@
+// Compile:         gcc seq.c -lm
+// Run:             ./a.out <features> <N> <eta> <testSize> <num_layers> <layer1> <layer2> ...
+// Note that regardless if what is put for the last layer, program will overwrite last layer to have size 1
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,10 +18,10 @@ typedef struct {
 
 int TOTAL = 8200;
 int N;
-int FEATURES = 11;
-int NUM_LAYERS = 3;
+int FEATURES;
+int NUM_LAYERS;
 int *LAYER_SIZES;
-float ETA = 0.5;
+float ETA = 0.005;
 
 Matrix *XTS;
 Matrix *YTS;
@@ -506,19 +510,29 @@ void testAccuracy(int testSize) {
 }
 
 int main(int argc, char** argv) {
-    N = 2;
+    FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
+    N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
+    ETA = (argc > 3) ? atof(argv[3]) : 0.01;
+    int testSize = (argc > 4) ? strtol(argv[4], NULL, 10) : 100;
+    NUM_LAYERS = (argc > 5) ? strtol(argv[5], NULL, 10) : 3;
+
+    printf("eta %f\n", ETA);
 
     LAYER_SIZES = (int *)malloc(NUM_LAYERS * sizeof(int));
-    LAYER_SIZES[0] = 10;
-    LAYER_SIZES[1] = 1;
-    LAYER_SIZES[2] = 1;
+
+    int i;
+    for (i = 0; i < NUM_LAYERS; i++) {
+        LAYER_SIZES[i] = (argc > 6+i) ? strtol(argv[6+i], NULL, 10) : 10;
+    }
+    LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
     initializeMatrices();
-    testAccuracy(100);
+    testAccuracy(testSize);
     // printMatrix(WTS[1]);
 
     int iter;
-    for (iter = 0; iter < 100; iter++) {
+    int maxIters = (TOTAL - testSize) / N;
+    for (iter = 0; iter < maxIters; iter++) {
         // Retrieve data from csv
         readInXY(iter*N, iter*N + N, XTS, YTS);
 
@@ -527,7 +541,7 @@ int main(int argc, char** argv) {
         backPropagation(out);
 
         // printf("\n\n\n");
-        testAccuracy(100);
+        testAccuracy(testSize);
         // printMatrix(WTS[1]);
 
         freeMatrix(out);
