@@ -72,8 +72,17 @@ function fillInNan(df)
 	delete!(df, :partner);
 	delete!(df, :pid);
 	@show showcols(df)
-	writetable("../dating/cleanedData.csv",df)
+	#writetable("../dating/cleanedData.csv",df)
 	return df
+end
+
+function normalizeData(df)
+	num_people, num_cols = size(df)
+	#1-8 shouldn't be normalized
+	for j in filter(e->!(e in [16,27,28,34],collect(8:num_cols)) #only normalize some columns
+		df[j]=(df[j]-minimum(df[j]))/(maximum(df[j])-minimum(df[j]))
+	end
+	writetable("../dating/CleanedAndNoramlizedData.csv", df)
 end
 
 function makeFreqGraphs(df)
