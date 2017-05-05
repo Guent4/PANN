@@ -340,7 +340,7 @@ void initializeMatrices() {
         }
 
         Matrix *matrix = (Matrix *)malloc(sizeof(Matrix));
-        matrix->rows = NUM_LAYERS - 1;
+        matrix->rows = LAYER_SIZES[i];
         matrix->cols = N;
         matrix->m = z;
         ZTS[i] = matrix;

@@ -25,6 +25,7 @@ void initializeMatrices();
 void printVector(float *vector, int len);
 
 // Matrix helpers
+Matrix *newMatrix(int m, int n);
 void printMatrix(Matrix *matrix);
 void printMatrixMatlab(Matrix *matrix);
 void matrixElementApply(Matrix *A, float(*f)(float));
@@ -96,31 +97,70 @@ int main(int argc, char **argv) {
 
 
 
+void testAccuracy(int testSize) {
+    int i, j;
+
+    // Get test data
+    Matrix *testX = (Matrix *)malloc(sizeof(Matrix));
+    testX->m = (float **)malloc(testSize * sizeof(float *));
+    for (i = 0; i < testSize; i++) {
+        testX->m[i] = (float *)malloc(FEATURES * sizeof(float));
+    }
+    testX->rows = testSize;
+    testX->cols = FEATURES;
+
+    Matrix *testY = (Matrix *)malloc(sizeof(Matrix));
+    testY->m = (float **)malloc(testSize * sizeof(float *));
+    for (i = 0; i < testSize; i++) {
+        testY->m[i] = (float *)malloc(sizeof(float));
+    }
+    testY->rows = testSize;
+    testY->cols = 1;
+
+    // Retrieve test data from csv
+    readInXY(TOTAL-testSize, TOTAL, testX, testY);
+
+    // Get the output
+    Matrix *testOut = (Matrix *)malloc(sizeof(Matrix));
+    feedForward(testX, testOut);
+
+    // Get the error
+    Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
+    matrixMatrixElementSub(testOut, testY, delta);
+
+    float error = matrixReduceSquared(delta);
+    printf("Error: %f\n", error);
+
+    freeMatrix(delta);
+    freeMatrix(testOut);
+    freeMatrix(testY);
+    freeMatrix(testX);
+}
+
+
+Matrix *newMatrix(int m, int n)
+{
+    Matrix *m = (Matrix *)malloc(sizeof(Matrix));
+    m->m = (float *)malloc(sizeof(float[m][n]));
+    m->rows = m;
+    m->cols = n;
+}
+
 void initializeMatrices()
 {
 
 	// Create input
-    XTS = (Matrix *)malloc(sizeof(Matrix));
-    XTS->m = (float *)malloc(sizeof(float[N][FEATURES]));
-    XTS->rows = N;
-    XTS->cols = FEATURES;
+    XTS = newMatrix(N, FEATURES);
 
 	// Create output
-    YTS = (Matrix *)malloc(sizeof(Matrix));
-    YTS->m = (float *)malloc(sizeof(float[N][1]));
-    YTS->rows = N;
-    YTS->cols = 1;
+    YTS = newMatrix(N, 1);
 
     // Create weight matrices
     WTS = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix **));
     for (int i = 0; i < NUM_LAYERS; i++) {
         int numRows = (i == 0) ? FEATURES : LAYER_SIZES[i-1];
 
-        Matrix *matrix = (Matrix *)malloc(sizeof(Matrix));
-        matrix->rows = numRows;
-        matrix->cols = LAYER_SIZES[i];
-        matrix->m = (float *)malloc(sizeof(float [numRows][LAYER_SIZES[i]]));
-        WTS[i] = matrix;
+        WTS[i] = newMatrix(numRows, LAYER_SIZES[i]);
 
         // The in->firstHidden and lastHidden->out have weights of 1
         if (i == 0 || i == NUM_LAYERS-1) {
@@ -135,11 +175,7 @@ void initializeMatrices()
     // Create S matrices
     ZTS = (Matrix **)malloc((NUM_LAYERS - 1) * sizeof(Matrix **));
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
-        Matrix *matrix = (Matrix *)malloc(sizeof(Matrix));
-        matrix->rows = NUM_LAYERS - 1;
-        matrix->cols = N;
-        matrix->m = (float*)malloc(sizeof(float[N][LAYER_SIZES[i]]));
-        ZTS[i] = matrix;
+        ZTS[i] = newMatrix(N, LATER_SIZES[i]);
     }
 }
 
