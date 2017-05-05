@@ -9,6 +9,7 @@
 #include <math.h>
 #include <float.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "matrix.h"
 
@@ -56,6 +57,7 @@ int main(int argc, char **argv) {
 
     initializeMatrices();
 
+    printf("test accuracy\n");
     testAccuracy(testSize);
     // printMatrix(WTS[1]);
     /*

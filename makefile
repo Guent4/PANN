@@ -5,7 +5,7 @@ ALL_INCLUDES =
 ALL_LIBS = -lm
 
 C_INCLUDES =
-C_LIBS = -lm
+C_LIBS = 
 
 #COMPUTE_VER ?= sm_52
 #COMPUTE = -arch=$(COMPUTE_VER)

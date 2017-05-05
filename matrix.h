@@ -8,7 +8,7 @@
 
 
 // i is row j is col
-#define IDXM(M, i, j) (i*M->cols + j)
+#define IDXM(M, I, J) ((I)*((M)->cols) + (J))
 
 typedef struct {
     int rows;
