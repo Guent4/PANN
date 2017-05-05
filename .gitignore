@@ -2,5 +2,5 @@
 *.stackdump
 *.out
 *.asv
-*o
+*.o
 .~lock.Speed Dating Data Key.doc#
