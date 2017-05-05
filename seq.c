@@ -46,7 +46,7 @@ void printMatrix(Matrix *matrix) {
         }
         printf("\n");
     }
-    printf("------------------------------------\n");   
+    printf("------------------------------------\n");
 }
 
 void printMatrixMatlab(Matrix *matrix) {
@@ -62,12 +62,12 @@ void printMatrixMatlab(Matrix *matrix) {
     printf("----------------------------------------------------------------------\n");
 }
 
-float incrementBy1(float val) {
-    return val + 1;
+float setTo1(float val) {
+    return 1;
 }
 
-float incrementByRand(float val) {
-    return val + (float)rand()/(RAND_MAX);
+float setToRand(float val) {
+    return (float)rand()/(RAND_MAX);
 }
 
 float multiplyByEta(float val) {
@@ -123,7 +123,7 @@ void matrixMatrixMultiply(Matrix *A, Matrix *B, Matrix *C) {
     }
 
     int i, j, k;
-    
+
     // Malloc the matrix C
     C->rows = A->rows;
     C->cols = B->cols;
@@ -165,7 +165,7 @@ void matrixMatrixElementAdd(Matrix *A, Matrix *B, Matrix *C) {
     float **matrix = (float **)malloc(A->rows * sizeof(float *));
     for (i = 0; i < B->rows; i++) {
         matrix[i] = (float *)malloc(A->cols * sizeof(float));
-        
+
         for (j = 0; j < A->cols; j++) {
             matrix[i][j] = A->m[i][j] + B->m[i][j];
         }
@@ -186,7 +186,7 @@ void matrixMatrixElementSub(Matrix *A, Matrix *B, Matrix *C) {
     float **matrix = (float **)malloc(A->rows * sizeof(float *));
     for (i = 0; i < B->rows; i++) {
         matrix[i] = (float *)malloc(A->cols * sizeof(float));
-        
+
         for (j = 0; j < A->cols; j++) {
             matrix[i][j] = A->m[i][j] - B->m[i][j];
         }
@@ -220,7 +220,7 @@ void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
 
 float matrixReduceSquared(Matrix *A) {
     float sum = 0.0;
-    
+
     int i, j;
     for (i = 0; i < A->rows; i++) {
         for (j = 0; j < A->cols; j++) {
@@ -239,7 +239,7 @@ float getfield(char* line, int num) {
             return atof(tok);
         }
     }
-    
+
     printf("There Cannot be any empty values in the ANN data\n");
     exit(1);
 }
@@ -252,7 +252,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
 
 
     FILE* fstream = fopen("./dating/temp.csv", "r");
-    
+
     if (fstream == NULL) {
         printf("\n file opening failed ");
         exit(1);
@@ -263,7 +263,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
         // Only include interested
         if (i >= starting && i < ending) {
             record = strtok(line, ",");
-            
+
             // Put each token in the right location (X or Y)
             j = 0;
             while (record != NULL) {
@@ -311,7 +311,7 @@ void initializeMatrices() {
         int numRows = (i == 0) ? FEATURES : LAYER_SIZES[i-1];
         float **w = (float **)malloc(numRows * sizeof(float *));
         for (j = 0; j < numRows; j++) {
-            w[j] = (float *)calloc(LAYER_SIZES[i], sizeof(float));
+            w[j] = (float *)malloc(LAYER_SIZES[i]*sizeof(float));
         }
 
         Matrix *matrix = (Matrix *)malloc(sizeof(Matrix));
@@ -322,9 +322,9 @@ void initializeMatrices() {
 
         // The in->firstHidden and lastHidden->out have weights of 1
         if (i == 0 || i == NUM_LAYERS-1) {
-            matrixElementApply(WTS[i], incrementBy1);
+            matrixElementApply(WTS[i], setTo1);
         } else {
-            matrixElementApply(WTS[i], incrementByRand);
+            matrixElementApply(WTS[i], setToRand);
         }
         // printf("WEIGHT %d\n", i);
         // printMatrixMatlab(matrix);
@@ -393,7 +393,7 @@ void feedForward(Matrix *in, Matrix *out) {
 
         // Save Z because this is sigmoid(S) and is needed in back propagation
         ZTS[layer] = z;
-        
+
         // Update values for next iteration
         in = z;
     }
@@ -460,7 +460,7 @@ void backPropagation(Matrix *estimation) {
 
         // Free temp matrices
         freeMatrix(transW);
-        freeMatrix(deltaW); 
+        freeMatrix(deltaW);
 
         // printf("\n\n\n");
     }
