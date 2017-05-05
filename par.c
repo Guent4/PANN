@@ -21,11 +21,20 @@ typedef struct {
     float *m;
 } Matrix;
 
+//ANN method
+void testAccuracy(int testSize);
+Matrix *feedForward(Matrix *in);
+void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
 void initializeMatrices();
+
+
 void printVector(float *vector, int len);
 
 // Matrix helpers
 Matrix *newMatrix(int m, int n);
+Matrix *matrixMatrixMultiply(Matrix *A, Matrix *B);
+Matrix *matrixMatrixElementSub(Matrix *A, Matrix *B);
+float matrixReduceSquared(Matrix *A);
 void printMatrix(Matrix *matrix);
 void printMatrixMatlab(Matrix *matrix);
 void matrixElementApply(Matrix *A, float(*f)(float));
@@ -36,6 +45,8 @@ void freeMatrices();
 //matrix element apply methods
 float setTo1(float val);
 float setToRand(float val);
+float sigmoid(float val);
+
 
 static int N;
 static int FEATURES;
@@ -67,10 +78,10 @@ int main(int argc, char **argv) {
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
     initializeMatrices();
-    /*
+
     testAccuracy(testSize);
     // printMatrix(WTS[1]);
-
+    /*
     int iter;
     int maxIters = (TOTAL - testSize) / N;
     for (iter = 0; iter < maxIters; iter++) {
@@ -97,36 +108,62 @@ int main(int argc, char **argv) {
 
 
 
-void testAccuracy(int testSize) {
+// starting is included; ending is not
+void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
+{
+    char buffer[2048];
+    char *record, *line;
     int i, j;
 
-    // Get test data
-    Matrix *testX = (Matrix *)malloc(sizeof(Matrix));
-    testX->m = (float **)malloc(testSize * sizeof(float *));
-    for (i = 0; i < testSize; i++) {
-        testX->m[i] = (float *)malloc(FEATURES * sizeof(float));
-    }
-    testX->rows = testSize;
-    testX->cols = FEATURES;
 
-    Matrix *testY = (Matrix *)malloc(sizeof(Matrix));
-    testY->m = (float **)malloc(testSize * sizeof(float *));
-    for (i = 0; i < testSize; i++) {
-        testY->m[i] = (float *)malloc(sizeof(float));
+    FILE* fstream = fopen("./dating/temp.csv", "r");
+
+    if (fstream == NULL) {
+        printf("\n file opening failed ");
+        exit(1);
     }
-    testY->rows = testSize;
-    testY->cols = 1;
+
+    i = -1;     // Starts at -1 to account for row of column headers
+    while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL) {
+        // Only include interested
+        if (i >= starting && i < ending) {
+            record = strtok(line, ",");
+
+            // Put each token in the right location (X or Y)
+            j = 0;
+            while (record != NULL) {
+                if (j == 0) {
+                    outputs->m[IDXM(outputs, i-starting, 0)] = atof(record);
+                } else {
+                    inputs->m[IDXM(inputs, i-starting, j-1)] = atof(record);
+                }
+
+                j++;
+                record = strtok(NULL, ",");
+            }
+        }
+
+        i++;
+    }
+
+    // printMatrixMatlab(XTS);
+}
+
+
+void testAccuracy(int testSize)
+{
+    // Get test data
+    Matrix *testX = newMatrix(testSize, FEATURES);
+    Matrix *testY = newMatrix(testSize, 1);
 
     // Retrieve test data from csv
     readInXY(TOTAL-testSize, TOTAL, testX, testY);
 
     // Get the output
-    Matrix *testOut = (Matrix *)malloc(sizeof(Matrix));
-    feedForward(testX, testOut);
+    Matrix *testOut = feedForward(testX);
 
     // Get the error
-    Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
-    matrixMatrixElementSub(testOut, testY, delta);
+    Matrix *delta = matrixMatrixElementSub(testOut, testY);
 
     float error = matrixReduceSquared(delta);
     printf("Error: %f\n", error);
@@ -138,12 +175,95 @@ void testAccuracy(int testSize) {
 }
 
 
+Matrix *feedForward(Matrix *in)
+{
+    Matrix *z = NULL;
+    for (int layer = 0; layer < NUM_LAYERS; layer++) {
+        // Multiply Z with W to get S
+        z = matrixMatrixMultiply(in, WTS[layer]);
+
+        // Note that the output perceptrons do not have activation function
+        if (layer == NUM_LAYERS - 1) break;
+
+        // Apply activation function to S to get Z
+        matrixElementApply(z, sigmoid);
+
+        // Save Z because this is sigmoid(S) and is needed in back propagation
+        ZTS[layer] = z;
+
+        // Update values for next iteration
+        in = z;
+    }
+
+    return z;
+}
+
+
+float matrixReduceSquared(Matrix *A)
+{
+    float sum = 0.0;
+
+    for (int i = 0; i < A->rows; i++) {
+        for (int j = 0; j < A->cols; j++) {
+            sum += pow(A->m[IDXM(A, i, j)], 2);
+        }
+    }
+
+    return sum;
+}
+
+
+Matrix *matrixMatrixMultiply(Matrix *A, Matrix *B)
+{
+    if (A->cols != B->rows) {
+        printf("Dimension mismatch: %dx%d %dx%d - matrixMatrixMultiply\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
+
+    // Malloc the matrix C
+    Matrix *C = newMatrix(A->rows, B->cols);
+
+    // Fill in values for C
+    for (int i = 0; i < A->rows; i++) {
+        for (int j = 0; j < B->cols; j++) {
+            float sum = 0.0;
+            for (int k = 0; k < A->cols; k++) {
+                sum += A->m[IDXM(A, i, k)] * B->m[IDXM(B, k, j)];
+            }
+            C->m[IDXM(C, i, j)] = sum;
+        }
+    }
+    return C;
+}
+
+
+Matrix *matrixMatrixElementSub(Matrix *A, Matrix *B) {
+    if (A->rows != B->rows || A->cols != B->cols) {
+        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementSub\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
+
+    Matrix *C = newMatrix(A->rows, A->cols);
+
+
+    for (int i = 0; i < A->rows; i++) {
+        for (int j = 0; j < A->cols; j++) {
+            C->m[IDXM(C, i, j)] = A->m[IDXM(A, i, j)] - B->m[IDXM(B, i, j)];
+        }
+    }
+
+    return C;
+}
+
+
+
 Matrix *newMatrix(int m, int n)
 {
-    Matrix *m = (Matrix *)malloc(sizeof(Matrix));
-    m->m = (float *)malloc(sizeof(float[m][n]));
-    m->rows = m;
-    m->cols = n;
+    Matrix *A = (Matrix *)malloc(sizeof(Matrix));
+    A->m = (float *)malloc(sizeof(float[m][n]));
+    A->rows = m;
+    A->cols = n;
+    return A;
 }
 
 void initializeMatrices()
@@ -175,9 +295,10 @@ void initializeMatrices()
     // Create S matrices
     ZTS = (Matrix **)malloc((NUM_LAYERS - 1) * sizeof(Matrix **));
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
-        ZTS[i] = newMatrix(N, LATER_SIZES[i]);
+        ZTS[i] = newMatrix(N, LAYER_SIZES[i]);
     }
 }
+
 
 void matrixElementApply(Matrix *A, float(*f)(float)) {
     for (int i = 0; i < A->rows; i++) {
@@ -197,6 +318,10 @@ float setTo1(float val)
 float setToRand(float val)
 {
     return (float)rand()/(RAND_MAX);
+}
+
+float sigmoid(float val) {
+    return (float)((double)1/(double)(1 + exp(-val)));
 }
 
 void freeMatrix(Matrix *matrix)
