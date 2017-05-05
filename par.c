@@ -23,9 +23,14 @@ typedef struct {
 
 void initializeMatrices();
 void printVector(float *vector, int len);
+
+// Matrix helpers
 void printMatrix(Matrix *matrix);
 void printMatrixMatlab(Matrix *matrix);
 void matrixElementApply(Matrix *A, float(*f)(float));
+
+void freeMatrix(Matrix *matrix);
+void freeMatrices();
 
 //matrix element apply methods
 float setTo1(float val);
@@ -81,11 +86,12 @@ int main(int argc, char **argv) {
 
         freeMatrix(out);
     }
+    */
 
     freeMatrices();
 
     free(LAYER_SIZES);
-    */
+
 }
 
 
@@ -146,14 +152,42 @@ void matrixElementApply(Matrix *A, float(*f)(float)) {
 }
 
 
-float setTo1(float val) {
+float setTo1(float val)
+{
     return 1;
 }
 
 
-float setToRand(float val) {
+float setToRand(float val)
+{
     return (float)rand()/(RAND_MAX);
 }
+
+void freeMatrix(Matrix *matrix)
+{
+    free(matrix->m);
+    free(matrix);
+}
+
+void freeMatrices()
+{
+    // Free X, Y
+    freeMatrix(XTS);
+    freeMatrix(YTS);
+
+    // Free weights matrix
+    for (int i = 0; i < NUM_LAYERS; i++) {
+        freeMatrix(WTS[i]);
+    }
+    free(WTS);
+
+    // Free Z matrix
+    for (int i = 0; i < NUM_LAYERS - 1; i++) {
+        freeMatrix(ZTS[i]);
+    }
+    free(ZTS);
+}
+
 
 void printVector(float *vector, int len)
 {
