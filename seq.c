@@ -22,6 +22,7 @@ int FEATURES;
 int NUM_LAYERS;
 int *LAYER_SIZES;
 float ETA = 0.005;
+float THRESHOLD = 0.5;
 
 Matrix *XTS;
 Matrix *YTS;
@@ -68,6 +69,10 @@ float setTo1(float val) {
 
 float setToRand(float val) {
     return (float)rand()/(RAND_MAX);
+}
+
+float roundToBinary(float val) {
+    return (val > THRESHOLD) ? 1 : 0;
 }
 
 float multiplyByEta(float val) {
@@ -196,6 +201,27 @@ void matrixMatrixElementSub(Matrix *A, Matrix *B, Matrix *C) {
     C->cols = A->cols;
 }
 
+void matrixMatrixElementDiff(Matrix *A, Matrix *B, Matrix *C) {
+    if (A->rows != B->rows || A->cols != B->cols) {
+        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementSub\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
+
+    int i, j;
+
+    float **matrix = (float **)malloc(A->rows * sizeof(float *));
+    for (i = 0; i < B->rows; i++) {
+        matrix[i] = (float *)malloc(A->cols * sizeof(float));
+
+        for (j = 0; j < A->cols; j++) {
+            matrix[i][j] = (A->m[i][j] != B->m[i][j]) ? 1 : 0;
+        }
+    }
+    C->m = matrix;
+    C->rows = A->rows;
+    C->cols = A->cols;
+}
+
 void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
     if (A->rows != B->rows || A->cols != B->cols) {
         printf("Dimension mismatch: %dx%d %dx%d - matrixMatrixElementMultiply\n", A->rows, A->cols, B->rows, B->cols);
@@ -218,13 +244,13 @@ void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
     C->cols = A->cols;
 }
 
-float matrixReduceSquared(Matrix *A) {
+float matrixReduceSumPow(Matrix *A, int exponent) {
     float sum = 0.0;
 
     int i, j;
     for (i = 0; i < A->rows; i++) {
         for (j = 0; j < A->cols; j++) {
-            sum += pow(A->m[i][j], 2);
+            sum += pow(A->m[i][j], exponent);
         }
     }
 
@@ -496,12 +522,15 @@ void testAccuracy(int testSize) {
     Matrix *testOut = (Matrix *)malloc(sizeof(Matrix));
     feedForward(testX, testOut);
 
+    // Modify the output so that it's binary
+    matrixElementApply(testOut, roundToBinary);
+
     // Get the error
     Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
-    matrixMatrixElementSub(testOut, testY, delta);
+    matrixMatrixElementDiff(testOut, testY, delta);
 
-    float error = matrixReduceSquared(delta);
-    printf("Error: %f\n", error);
+    float error = matrixReduceSumPow(delta, 1);
+    printf("Error: %f%%\n", (float)100 * error / (float)testSize);
 
     freeMatrix(delta);
     freeMatrix(testOut);
