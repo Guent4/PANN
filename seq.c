@@ -214,7 +214,7 @@ void matrixMatrixElementDiff(Matrix *A, Matrix *B, Matrix *C) {
         matrix[i] = (float *)malloc(A->cols * sizeof(float));
 
         for (j = 0; j < A->cols; j++) {
-            matrix[i][j] = (A->m[i][j] != B->m[i][j]) ? 1 : 0;
+            matrix[i][j] = (A->m[i][j] - B->m[i][j] > 0.000001) ? 1 : 0;
         }
     }
     C->m = matrix;
