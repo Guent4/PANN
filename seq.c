@@ -446,89 +446,140 @@ void feedForward(Matrix *in, Matrix *out) {
     free(z);
 }
 
+// void backPropagation(Matrix *estimation) {
+//     int layer, i;
+
+//     // Get the error
+//     Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
+//     matrixMatrixElementSub(estimation, YTS, delta);
+
+//     // printMatrix(delta);
+
+//     for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
+//         // Transpose W to multiply with delta
+//         Matrix *transW = (Matrix *)malloc(sizeof(Matrix));
+//         transpose(WTS[layer + 1], transW);
+
+//         Matrix *deltaW = (Matrix *)malloc(sizeof(Matrix));
+//         matrixMatrixMultiply(delta, transW, deltaW);
+
+//         // Element wise multiplication between deltaW and derivative of S
+//         freeMatrix(delta);
+//         Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
+//         matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
+//         matrixMatrixElementMultiply(deltaW, ZTS[layer], delta);
+
+//         if (layer >= 0) {
+//             // Calculate how much the weights need to be updated by
+
+//             // First transpose Z
+//             Matrix *transposedZ = (Matrix *)malloc(sizeof(Matrix));
+//             if (layer == 0) {
+//                 transpose(XTS, transposedZ);
+//             } else {
+//                 transpose(ZTS[layer - 1], transposedZ);
+//             }
+
+//             // Now multiply Z with D
+//             Matrix *wUpdates = (Matrix *)malloc(sizeof(Matrix));
+//             matrixMatrixMultiply(transposedZ, delta, wUpdates);
+
+//             // Multiply by -eta
+//             matrixElementApply(wUpdates, multiplyByEta);
+
+//             // Calculated how much to update by.  Now apply to W to update
+//             // printMatrix(WTS[layer]);
+//             matrixMatrixElementAdd(WTS[layer], wUpdates, WTS[layer]);
+//             // printMatrix(WTS[layer]);
+
+//             // Free up temp matrices
+//             freeMatrix(transposedZ);
+//             freeMatrix(wUpdates);
+//         }
+
+//         // Free temp matrices
+//         freeMatrix(transW);
+//         freeMatrix(deltaW);
+
+//         // printf("\n\n\n");
+//     }
+
+//     // Free temporary matrices
+//     freeMatrix(delta);
+// }
+
 void backPropagation(Matrix *estimation) {
     int layer, i;
 
-    // Get the error
-    Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
-    matrixMatrixElementSub(estimation, YTS, delta);
-
-    // printMatrix(delta);
-
+    // Backprop
+    printf("Backprop\n");
+    Matrix **D = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix *));
     for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
-        // Transpose W to multiply with delta
-        Matrix *transW = (Matrix *)malloc(sizeof(Matrix));
-        transpose(WTS[layer + 1], transW);
+        Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
+        if (layer == NUM_LAYERS - 1) {
+            Matrix *Dtrans = (Matrix *)malloc(sizeof(Matrix));
+            matrixMatrixElementSub(estimation, YTS, Dtrans);
+            transpose(Dtrans, DTemp);
+            free(Dtrans);
+            D[layer] = DTemp;
+        } else {
+            matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
+            Matrix *F = (Matrix *)malloc(sizeof(Matrix));
+            transpose(ZTS[layer], F);
 
-        Matrix *deltaW = (Matrix *)malloc(sizeof(Matrix));
-        matrixMatrixMultiply(delta, transW, deltaW);
-        // if (layer == 0) {
-        //     printf("delta\n");
-        //     printMatrix(delta);
-        //     printf("transW\n");
-        //     printMatrix(transW);
-        //     printf("deltaW\n");
-        //     printMatrixMatlab(deltaW);
-        //     printf("ZTS[%d]\n", layer);
-        //     printMatrixMatlab(ZTS[layer]);
-        // }
-
-        // Element wise multiplication between deltaW and derivative of S
-        freeMatrix(delta);
-        Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
-        matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
-        matrixMatrixElementMultiply(deltaW, ZTS[layer], delta);
-
-        // if (layer == 0) {
-        //     printf("new delta\n");
-        //     printMatrix(delta);
-        // }
-
-        if (layer >= 0) {
-            // Calculate how much the weights need to be updated by
-
-            // First transpose Z
-            Matrix *transposedZ = (Matrix *)malloc(sizeof(Matrix));
-            if (layer == 0) {
-                transpose(XTS, transposedZ);
-            } else {
-                transpose(ZTS[layer - 1], transposedZ);
-            }
-
-            // printf("Update\n");
-            // printMatrix(transposedZ);
-            // printf("DELTA %d\n", layer);
-            // printMatrix(delta);
-
-            // Now multiply Z with D
-            Matrix *wUpdates = (Matrix *)malloc(sizeof(Matrix));
-            matrixMatrixMultiply(transposedZ, delta, wUpdates);
+            Matrix *FW = (Matrix *)malloc(sizeof(Matrix));
+            printf("asdfsadf\n");
+            matrixMatrixElementMultiply(F, WTS[layer], FW);
+            printf("asdfsadf\n");
             
-            // printf("wUpdates\n");
-            // printMatrix(WTS[layer]);
+            Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
+            matrixMatrixMultiply(FW, D[layer + 1], DTemp);
+            D[layer] = DTemp;
+            
+            free(FW);
+            free(F);
 
-            // Multiply by -eta
-            matrixElementApply(wUpdates, multiplyByEta);
 
-            // Calculated how much to update by.  Now apply to W to update
-            // printMatrix(WTS[layer]);
-            matrixMatrixElementAdd(WTS[layer], wUpdates, WTS[layer]);
-            // printMatrix(WTS[layer]);
+            // matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
+            // Matrix *F = (Matrix *)malloc(sizeof(Matrix));
+            // transpose(ZTS[layer], F);
+            
+            // Matrix *WD = (Matrix *)malloc(sizeof(Matrix));
+            // matrixMatrixElementMultiply(WTS[layer], D[layer + 1], WD);
 
-            // Free up temp matrices
-            freeMatrix(transposedZ);
-            freeMatrix(wUpdates);
+            // Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
+            // matrixMatrixElementMultiply(F, WD, DTemp);
+            // D[layer] = DTemp;
+
+            // free(WD);
+            // free(F);
         }
+    }
 
-        // Free temp matrices
-        freeMatrix(transW);
-        freeMatrix(deltaW);
+    printf("weights\n");
+    // Weight Updates
+    for (layer = 0; layer < NUM_LAYERS; layer++) {
+        Matrix *DZ = (Matrix *)malloc(sizeof(Matrix));
+        if (layer == 0) {
+            matrixMatrixMultiply(D[layer], XTS, DZ);
+        } else {       
+            matrixMatrixMultiply(D[layer], ZTS[layer - 1], DZ);
+        }
+        Matrix *DZTrans = (Matrix *)malloc(sizeof(Matrix));
+        transpose(DZ, DZTrans);
+        Matrix *wUpdates = (Matrix *)malloc(sizeof(Matrix));
+        matrixElementApply(wUpdates, multiplyByEta);
+        matrixMatrixElementAdd(WTS[layer], wUpdates, WTS[layer]);
 
-        // printf("\n\n\n");
+        free(wUpdates);
+        free(DZTrans);
+        free(DZ);
     }
 
     // Free temporary matrices
-    freeMatrix(delta);
+    for (i = 0; i < NUM_LAYERS; i++) {
+        freeMatrix(D[i]);
+    }
 }
 
 void testAccuracy(int testSize) {
