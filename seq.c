@@ -16,7 +16,7 @@ typedef struct {
     float **m;
 } Matrix;
 
-int TOTAL = 8200;
+int TOTAL = 8300;
 int N;
 int FEATURES;
 int NUM_LAYERS;
@@ -28,6 +28,8 @@ Matrix *XTS;
 Matrix *YTS;
 Matrix **WTS;
 Matrix **ZTS;
+
+int DONE = 0;
 
 void printVector(float *vector, int len) {
 	printf("------------------------------------\n");
@@ -63,6 +65,10 @@ void printMatrixMatlab(Matrix *matrix) {
     printf("----------------------------------------------------------------------\n");
 }
 
+float setTo0(float val) {
+    return 0;
+}
+
 float setTo1(float val) {
     return 1;
 }
@@ -80,7 +86,7 @@ float multiplyByEta(float val) {
 }
 
 float sigmoid(float val) {
-    return (float)((double)1/(double)(1 + exp(-val)));
+    return (float)((float)1/((float)1 + exp(-val)));
 }
 
 float sigmoidDeriv(float val) {
@@ -235,6 +241,7 @@ void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
         matrix[i] = (float *)malloc(A->cols * sizeof(float));
 
         for (j = 0; j < A->cols; j++) {
+            // printf("%fx%f = %f\n", A->m[i][j], B->m[i][j], A->m[i][j]*B->m[i][j]);
             matrix[i][j] = A->m[i][j] * B->m[i][j];
         }
     }
@@ -277,7 +284,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
     int i, j;
 
 
-    FILE* fstream = fopen("./dating/temp.csv", "r");
+    FILE* fstream = fopen("./dating/CleanedAndNoramlizedData.csv", "r");
 
     if (fstream == NULL) {
         printf("\n file opening failed ");
@@ -347,8 +354,12 @@ void initializeMatrices() {
         WTS[i] = matrix;
 
         // The in->firstHidden and lastHidden->out have weights of 1
-        if (i == 0 || i == NUM_LAYERS-1) {
-            matrixElementApply(WTS[i], setTo1);
+        if (i == 0) {
+            matrixElementApply(WTS[i], setTo0);
+        } else if (i == NUM_LAYERS-1) {
+            // matrixElementApply(WTS[i], setTo1);
+            matrixElementApply(WTS[i], setTo0);
+            WTS[i]->m[0][0] = 1;
         } else {
             matrixElementApply(WTS[i], setToRand);
         }
@@ -410,6 +421,9 @@ void feedForward(Matrix *in, Matrix *out) {
         // Multiply Z with W to get S
         z = (Matrix *)malloc(sizeof(Matrix));
         matrixMatrixMultiply(in, WTS[layer], z);
+        if (DONE) {
+            printMatrix(z);
+        }
 
         // Note that the output perceptrons do not have activation function
         if (layer == NUM_LAYERS - 1) break;
@@ -441,41 +455,63 @@ void backPropagation(Matrix *estimation) {
 
     // printMatrix(delta);
 
-    for (layer = NUM_LAYERS - 2; layer >= 0; layer--) {
+    for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
         // Transpose W to multiply with delta
         Matrix *transW = (Matrix *)malloc(sizeof(Matrix));
         transpose(WTS[layer + 1], transW);
 
         Matrix *deltaW = (Matrix *)malloc(sizeof(Matrix));
         matrixMatrixMultiply(delta, transW, deltaW);
+        // if (layer == 0) {
+        //     printf("delta\n");
+        //     printMatrix(delta);
+        //     printf("transW\n");
+        //     printMatrix(transW);
+        //     printf("deltaW\n");
+        //     printMatrixMatlab(deltaW);
+        //     printf("ZTS[%d]\n", layer);
+        //     printMatrixMatlab(ZTS[layer]);
+        // }
 
         // Element wise multiplication between deltaW and derivative of S
+        freeMatrix(delta);
+        Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
         matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
         matrixMatrixElementMultiply(deltaW, ZTS[layer], delta);
 
-        // Calculate the weight updates
-        if (layer != 0) {
+        // if (layer == 0) {
+        //     printf("new delta\n");
+        //     printMatrix(delta);
+        // }
+
+        if (layer >= 0) {
             // Calculate how much the weights need to be updated by
 
             // First transpose Z
             Matrix *transposedZ = (Matrix *)malloc(sizeof(Matrix));
-            transpose(ZTS[layer - 1], transposedZ);
+            if (layer == 0) {
+                transpose(XTS, transposedZ);
+            } else {
+                transpose(ZTS[layer - 1], transposedZ);
+            }
 
             // printf("Update\n");
-            // printMatrix(ZTS[layer-1]);
+            // printMatrix(transposedZ);
+            // printf("DELTA %d\n", layer);
             // printMatrix(delta);
 
             // Now multiply Z with D
             Matrix *wUpdates = (Matrix *)malloc(sizeof(Matrix));
             matrixMatrixMultiply(transposedZ, delta, wUpdates);
+            
+            // printf("wUpdates\n");
+            // printMatrix(WTS[layer]);
 
             // Multiply by -eta
             matrixElementApply(wUpdates, multiplyByEta);
-            // printMatrix(wUpdates);
 
             // Calculated how much to update by.  Now apply to W to update
             // printMatrix(WTS[layer]);
-            // printMatrix(wUpdates);
             matrixMatrixElementAdd(WTS[layer], wUpdates, WTS[layer]);
             // printMatrix(WTS[layer]);
 
@@ -516,26 +552,37 @@ void testAccuracy(int testSize) {
     testY->cols = 1;
 
     // Retrieve test data from csv
+    printf("%d %d\n", TOTAL-testSize, TOTAL);
     readInXY(TOTAL-testSize, TOTAL, testX, testY);
 
     // Get the output
     Matrix *testOut = (Matrix *)malloc(sizeof(Matrix));
     feedForward(testX, testOut);
 
-    // Modify the output so that it's binary
-    matrixElementApply(testOut, roundToBinary);
+    // TESTING DATA OUTPUT
+    Matrix *outTrans = (Matrix *)malloc(sizeof(Matrix));
+    transpose(testOut, outTrans);
+    printMatrix(outTrans);
 
     // Get the error
     Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
     matrixMatrixElementDiff(testOut, testY, delta);
 
-    float error = matrixReduceSumPow(delta, 1);
-    printf("Error: %f%%\n", (float)100 * error / (float)testSize);
+    float error = matrixReduceSumPow(delta, 2);
+    printf("Error: %f\t", (float)error);
+
+    // Modify the output so that it's binary
+    matrixElementApply(testOut, roundToBinary);
+    matrixMatrixElementDiff(testOut, testY, delta);
+
+    float errorPerc = matrixReduceSumPow(delta, 1);
+    printf("Error: %f%%\n", (float)errorPerc*100 / (float)(testSize));    
 
     freeMatrix(delta);
     freeMatrix(testOut);
     freeMatrix(testY);
     freeMatrix(testX);
+    free(outTrans);
 }
 
 int main(int argc, char** argv) {
@@ -559,22 +606,33 @@ int main(int argc, char** argv) {
     testAccuracy(testSize);
     // printMatrix(WTS[1]);
 
-    int iter;
-    int maxIters = (TOTAL - testSize) / N;
-    for (iter = 0; iter < maxIters; iter++) {
-        // Retrieve data from csv
-        readInXY(iter*N, iter*N + N, XTS, YTS);
+    int outer;
+    for (outer == 0; outer < 100; outer++) {
+        int iter;
+        int maxIters = (TOTAL - testSize) / N;
+        for (iter = 0; iter < maxIters; iter++) {
+            // Retrieve data from csv
+            readInXY(iter*N, iter*N + N, XTS, YTS);
 
-        Matrix *out = (Matrix *)malloc(sizeof(Matrix));
-        feedForward(XTS, out);
-        backPropagation(out);
+            Matrix *out = (Matrix *)malloc(sizeof(Matrix));
+            feedForward(XTS, out);
+            backPropagation(out);
 
-        // printf("\n\n\n");
-        testAccuracy(testSize);
-        // printMatrix(WTS[1]);
+            // printf("\n\n\n");
+            if (iter % 20 == 0) {
+                testAccuracy(testSize);
+                // printMatrix(WTS[2]);
+            }
+            // printMatrix(WTS[1]);
 
-        freeMatrix(out);
+            freeMatrix(out);
+        }
     }
+
+    // printf("\n\n\n");
+    // for (i = 0; i < NUM_LAYERS; i++) {
+    //     printMatrix(WTS[i]);
+    // }
 
     freeMatrices();
 
