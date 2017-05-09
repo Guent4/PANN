@@ -306,7 +306,8 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
     int i, j;
 
 
-    FILE* fstream = fopen("./dating/CleanedAndNoramlizedData.csv", "r");
+    // FILE* fstream = fopen("./dating/CleanedAndNoramlizedData.csv", "r");
+    FILE* fstream = fopen("./dating/temp.csv", "r");
 
     if (fstream == NULL) {
         printf("\n file opening failed ");
@@ -634,7 +635,7 @@ void testAccuracy(int testSize) {
 
     Matrix *trans = (Matrix *)malloc(sizeof(Matrix));
     transpose(delta, trans);
-    // printMatrix(trans);
+    printMatrix(trans);
     free(trans);
 
     float error = matrixReduceSumPow(delta, 2);
