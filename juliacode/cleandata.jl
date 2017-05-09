@@ -74,6 +74,7 @@ function fillInNan(df)
 	normalizeData(df)
 	delete!(df, :condtn)
 	delete!(df, :round)
+	delete!(df, :wave)
 	@show showcols(df)
 	writetable("../dating/CleanedAndNoramlizedData.csv",df)
 	return df
