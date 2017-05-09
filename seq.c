@@ -336,6 +336,8 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
         i++;
     }
 
+    fclose(fstream);
+
     // printMatrixMatlab(XTS);
 }
 
@@ -614,7 +616,6 @@ void testAccuracy(int testSize) {
     testY->cols = 1;
 
     // Retrieve test data from csv
-    printf("%d %d\n", TOTAL-testSize, TOTAL);
     readInXY(TOTAL-testSize, TOTAL, testX, testY);
 
     // Get the output
@@ -624,7 +625,7 @@ void testAccuracy(int testSize) {
     // TESTING DATA OUTPUT
     Matrix *outTrans = (Matrix *)malloc(sizeof(Matrix));
     transpose(testOut, outTrans);
-    printMatrix(outTrans);
+    // printMatrix(outTrans);
     free(outTrans);
 
     // Get the error
@@ -633,18 +634,18 @@ void testAccuracy(int testSize) {
 
     Matrix *trans = (Matrix *)malloc(sizeof(Matrix));
     transpose(delta, trans);
-    printMatrix(trans);
+    // printMatrix(trans);
     free(trans);
 
     float error = matrixReduceSumPow(delta, 2);
-    printf("Error: %f\t", (float)error);
+    printf("Error: %f\n", (float)error);
 
-    // Modify the output so that it's binary
-    matrixElementApply(testOut, roundToBinary);
-    matrixMatrixElementDiff(testOut, testY, delta);
+    // // Modify the output so that it's binary
+    // matrixElementApply(testOut, roundToBinary);
+    // matrixMatrixElementDiff(testOut, testY, delta);
 
-    float errorPerc = matrixReduceSumPow(delta, 1);
-    printf("Error: %f%%\n", (float)errorPerc*100 / (float)(testSize));    
+    // float errorPerc = matrixReduceSumPow(delta, 1);
+    // printf("Error: %f%%\n", (float)errorPerc*100 / (float)(testSize));    
 
     freeMatrix(delta);
     freeMatrix(testOut);
