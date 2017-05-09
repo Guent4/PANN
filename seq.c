@@ -207,6 +207,28 @@ void matrixMatrixElementSub(Matrix *A, Matrix *B, Matrix *C) {
     C->cols = A->cols;
 }
 
+void matrixMatrixElementSubP(Matrix *A, Matrix *B, Matrix *C) {
+    if (A->rows != B->rows || A->cols != B->cols) {
+        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementSub\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
+
+    int i, j;
+
+    float **matrix = (float **)malloc(A->rows * sizeof(float *));
+    for (i = 0; i < B->rows; i++) {
+        matrix[i] = (float *)malloc(A->cols * sizeof(float));
+
+        for (j = 0; j < A->cols; j++) {
+            printf("%f - %f = %f\n", A->m[i][j], B->m[i][j], A->m[i][j] - B->m[i][j]);
+            matrix[i][j] = A->m[i][j] - B->m[i][j];
+        }
+    }
+    C->m = matrix;
+    C->rows = A->rows;
+    C->cols = A->cols;
+}
+
 void matrixMatrixElementDiff(Matrix *A, Matrix *B, Matrix *C) {
     if (A->rows != B->rows || A->cols != B->cols) {
         printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementSub\n", A->rows, A->cols, B->rows, B->cols);
@@ -512,7 +534,6 @@ void backPropagation(Matrix *estimation) {
     int layer, i;
 
     // Backprop
-    printf("Backprop\n");
     Matrix **D = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix *));
     for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
         Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
@@ -523,56 +544,46 @@ void backPropagation(Matrix *estimation) {
             free(Dtrans);
             D[layer] = DTemp;
         } else {
+            // for (i = 0; i < NUM_LAYERS; i++) {
+            //     printf("D%d    %dx%d\n", i, D[i]->rows, D[i]->cols);
+            //     printf("W%d    %dx%d\n", i, WTS[i]->rows, WTS[i]->cols);
+            //     if (i != NUM_LAYERS-1) {
+            //         printf("F%d    %dx%d\n", i, ZTS[i]->cols, ZTS[i]->rows);
+            //     } else {
+            //         printf("F%d    %dx%d\n", i, YTS->rows, YTS->cols);
+            //     }
+            // }
+
             matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
             Matrix *F = (Matrix *)malloc(sizeof(Matrix));
             transpose(ZTS[layer], F);
-
-            Matrix *FW = (Matrix *)malloc(sizeof(Matrix));
-            printf("asdfsadf\n");
-            matrixMatrixElementMultiply(F, WTS[layer], FW);
-            printf("asdfsadf\n");
             
+            Matrix *WD = (Matrix *)malloc(sizeof(Matrix));
+            matrixMatrixMultiply(WTS[layer + 1], D[layer + 1], WD);
+
             Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
-            matrixMatrixMultiply(FW, D[layer + 1], DTemp);
+            matrixMatrixElementMultiply(F, WD, DTemp);
             D[layer] = DTemp;
-            
-            free(FW);
+
+            free(WD);
             free(F);
-
-
-            // matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
-            // Matrix *F = (Matrix *)malloc(sizeof(Matrix));
-            // transpose(ZTS[layer], F);
-            
-            // Matrix *WD = (Matrix *)malloc(sizeof(Matrix));
-            // matrixMatrixElementMultiply(WTS[layer], D[layer + 1], WD);
-
-            // Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
-            // matrixMatrixElementMultiply(F, WD, DTemp);
-            // D[layer] = DTemp;
-
-            // free(WD);
-            // free(F);
         }
     }
 
-    printf("weights\n");
     // Weight Updates
     for (layer = 0; layer < NUM_LAYERS; layer++) {
         Matrix *DZ = (Matrix *)malloc(sizeof(Matrix));
         if (layer == 0) {
             matrixMatrixMultiply(D[layer], XTS, DZ);
-        } else {       
+        } else {
             matrixMatrixMultiply(D[layer], ZTS[layer - 1], DZ);
         }
-        Matrix *DZTrans = (Matrix *)malloc(sizeof(Matrix));
-        transpose(DZ, DZTrans);
         Matrix *wUpdates = (Matrix *)malloc(sizeof(Matrix));
+        transpose(DZ, wUpdates);
         matrixElementApply(wUpdates, multiplyByEta);
         matrixMatrixElementAdd(WTS[layer], wUpdates, WTS[layer]);
 
         free(wUpdates);
-        free(DZTrans);
         free(DZ);
     }
 
@@ -614,10 +625,16 @@ void testAccuracy(int testSize) {
     Matrix *outTrans = (Matrix *)malloc(sizeof(Matrix));
     transpose(testOut, outTrans);
     printMatrix(outTrans);
+    free(outTrans);
 
     // Get the error
     Matrix *delta = (Matrix *)malloc(sizeof(Matrix));
-    matrixMatrixElementDiff(testOut, testY, delta);
+    matrixMatrixElementSub(testOut, testY, delta);
+
+    Matrix *trans = (Matrix *)malloc(sizeof(Matrix));
+    transpose(delta, trans);
+    printMatrix(trans);
+    free(trans);
 
     float error = matrixReduceSumPow(delta, 2);
     printf("Error: %f\t", (float)error);
@@ -633,7 +650,6 @@ void testAccuracy(int testSize) {
     freeMatrix(testOut);
     freeMatrix(testY);
     freeMatrix(testX);
-    free(outTrans);
 }
 
 int main(int argc, char** argv) {
