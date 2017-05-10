@@ -13,36 +13,43 @@
 
 #include "matrix.h"
 
+
+#define BILLION 1000000000L
+#define MILLION 1000000L
+#define THOUSAND 1000L
 #define TOTAL 8200
 
-
 //ANN method
-void testAccuracy(int testSize);
+float testAccuracy(int testSize);
 Matrix *feedForward(Matrix *in);
 void backPropagation(Matrix *estimation);
 void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
 void initializeMatrices();
 void freeMatrices();
 
-void printVector(float *vector, int len);
-
-
 static int N;
 static int FEATURES;
 static int NUM_LAYERS;
 static int *LAYER_SIZES;
 static float ETA = 0.005;
-
+static float ERROR_THRESHOLD = 0.01;
 
 static Matrix *XTS;
 static Matrix *YTS;
 static Matrix **WTS;
 static Matrix **ZTS;
 
-int main(int argc, char **argv)
-{
+static Matrix *testX;
+static Matrix *testY;
+
+int main(int argc, char **argv) {
+    uint64_t diff;
+    struct timespec start, end;
+
+    // Set random seed
     //srand(time(NULL));
     srand(1);
+
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
     ETA = (argc > 3) ? atof(argv[3]) : 0.01;
@@ -59,15 +66,14 @@ int main(int argc, char **argv)
     }
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
-    initializeMatrices();
+    // Start timer
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
-    printf("test accuracy\n");
-    testAccuracy(testSize);
-    // printMatrix(WTS[1]);
+    initializeMatrices(testSize);
 
-    for (int outer = 0; outer < 100; outer++) {
-
-        for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
+    int stop = 0;
+    for (int outer = 0; outer < 1000 && stop == 0; outer++) {
+        for (int iter = 0; iter < (TOTAL - testSize)/N && stop == 0; iter++) {
             // Retrieve data from csv
             readInXY(iter*N, iter*N + N, XTS, YTS);
 
@@ -75,28 +81,33 @@ int main(int argc, char **argv)
             backPropagation(out);
 
             // printf("\n\n\n");
-            if (iter % 20 == 0) {
-                testAccuracy(testSize);
-                // printMatrix(WTS[2]);
-            }
-            // printMatrix(WTS[1]);
+            float error = testAccuracy(testSize);
+            stop = (error < ERROR_THRESHOLD) ? 1 : 0;
 
             freeMatrix(out);
         }
     }
 
+    printf("Stopped %d\n", stop);
+    
+    // Stop timer
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    
+    // Calculate the time it took to perform calculation
+    diff = BILLION * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec;
+    diff = diff / MILLION;   // To get milliseconds from nanoseconds
+    printf("elapsed time = %llu milliseconds\n", (long long unsigned int) diff);    
+
 
     freeMatrices();
 
     free(LAYER_SIZES);
-
 }
 
 
 
 // starting is included; ending is not
-void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
-{
+void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
     char buffer[2048];
     char *record, *line;
     int i, j;
@@ -105,7 +116,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
     FILE* fstream = fopen("./dating/temp.csv", "r");
 
     if (fstream == NULL) {
-        printf("\n file opening failed ");
+        printf("\n file opening failed \n");
         exit(1);
     }
 
@@ -137,15 +148,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
 }
 
 
-void testAccuracy(int testSize)
-{
-    // Get test data
-    Matrix *testX = newMatrix(testSize, FEATURES);
-    Matrix *testY = newMatrix(testSize, 1);
-
-    // Retrieve test data from csv
-    readInXY(TOTAL-testSize, TOTAL, testX, testY);
-
+float testAccuracy(int testSize) {
     // Get the output
     Matrix *testOut = feedForward(testX);
 
@@ -153,7 +156,6 @@ void testAccuracy(int testSize)
     Matrix *delta = matrixMatrixElementSub(testOut, testY);
 
     Matrix *trans = matrixTranspose(delta);
-    printMatrix(trans);
     freeMatrix(trans);
 
     float error = matrixReduceSumPow(delta, 2);
@@ -161,13 +163,12 @@ void testAccuracy(int testSize)
 
     freeMatrix(delta);
     freeMatrix(testOut);
-    freeMatrix(testY);
-    freeMatrix(testX);
+
+    return error;
 }
 
 
-Matrix *feedForward(Matrix *in)
-{
+Matrix *feedForward(Matrix *in) {
     Matrix *z = NULL;
     for (int layer = 0; layer < NUM_LAYERS; layer++) {
         // Multiply Z with W to get S
@@ -191,9 +192,7 @@ Matrix *feedForward(Matrix *in)
 
 
 
-void backPropagation(Matrix *estimation)
-{
-
+void backPropagation(Matrix *estimation) {
     // Backprop
     Matrix **D = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix *));
 
@@ -244,9 +243,7 @@ void backPropagation(Matrix *estimation)
 
 
 
-void initializeMatrices()
-{
-
+void initializeMatrices(int testSize) {
 	// Create input
     XTS = newMatrix(N, FEATURES);
 
@@ -277,11 +274,17 @@ void initializeMatrices()
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
         ZTS[i] = newMatrix(N, LAYER_SIZES[i]);
     }
+
+    // Get test data
+    testX = newMatrix(testSize, FEATURES);
+    testY = newMatrix(testSize, 1);
+
+    // Retrieve test data from csv
+    readInXY(TOTAL-testSize, TOTAL, testX, testY);
 }
 
 
-void freeMatrices()
-{
+void freeMatrices() {
     // Free X, Y
     freeMatrix(XTS);
     freeMatrix(YTS);
@@ -297,15 +300,7 @@ void freeMatrices()
         freeMatrix(ZTS[i]);
     }
     free(ZTS);
-}
 
-
-void printVector(float *vector, int len)
-{
-	printf("------------------------------------\n");
-	int i;
-	for (i = 0; i < len; i++) {
-		printf("%f\n", vector[i]);
-	}
-	printf("------------------------------------\n");
+    freeMatrix(testY);
+    freeMatrix(testX);
 }
