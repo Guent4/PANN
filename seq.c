@@ -65,7 +65,7 @@ int main(int argc, char **argv)
     testAccuracy(testSize);
     // printMatrix(WTS[1]);
 
-    for (int outer = 0; outer < 1; outer++) {
+    for (int outer = 0; outer < 100; outer++) {
 
         for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
             // Retrieve data from csv
