@@ -33,7 +33,7 @@ Matrix *matrixMatrixElementSub(Matrix *A, Matrix *B) {
 
     Matrix *C = newMatrix(A->rows, A->cols);
 
-
+    int i, j;
     for (int i = 0; i < A->rows; i++) {
         for (int j = 0; j < A->cols; j++) {
             C->m[IDXM(C, i, j)] = A->m[IDXM(A, i, j)] - B->m[IDXM(B, i, j)];
