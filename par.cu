@@ -272,7 +272,7 @@ Matrix *feedForward(Matrix *in)
 
         //printf("Launching kernel with dim y: %d, dim x: %d\n", UINT_DIV_CEIL(wts_cols, dimBlock.x), UINT_DIV_CEIL(in_rows , dimBlock.y));
 
-
+        cudaDeviceSynchronize();
         cuda_matirxElementSigmoid<<<blocks, BLOCK_SIZE>>>(dev_z, in_rows, wts_cols);
 
 
@@ -464,7 +464,7 @@ __global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols)
 
     if (tid < rows*cols)
     {
-        A[IDX2C(tid%rows, tid/rows, rows)] = 1.0/(1.0 + expf(-1*IDX2C(tid%rows, tid/rows, rows)));
+        A[IDX2C(tid%rows, tid/rows, rows)] = 1.0/(1.0 + expf(-1*A[IDX2C(tid%rows, tid/rows, rows)]));
     }
 
 }
