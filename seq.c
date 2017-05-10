@@ -47,8 +47,7 @@ int main(int argc, char **argv) {
     struct timespec start, end;
 
     // Set random seed
-    //srand(time(NULL));
-    srand(1);
+    srand(time(NULL));
 
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
@@ -72,7 +71,7 @@ int main(int argc, char **argv) {
     initializeMatrices(testSize);
 
     int stop = 0;
-    for (int outer = 0; outer < 1000 && stop == 0; outer++) {
+    for (int outer = 0; outer < 100000 && stop == 0; outer++) {
         for (int iter = 0; iter < (TOTAL - testSize)/N && stop == 0; iter++) {
             // Retrieve data from csv
             readInXY(iter*N, iter*N + N, XTS, YTS);
