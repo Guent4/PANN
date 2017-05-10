@@ -65,7 +65,7 @@ int main(int argc, char **argv)
     testAccuracy(testSize);
     // printMatrix(WTS[1]);
 
-    for (int outer = 0; outer < 100; outer++) {
+    for (int outer = 0; outer < 1; outer++) {
 
         for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
             // Retrieve data from csv
@@ -177,7 +177,7 @@ Matrix *feedForward(Matrix *in)
         if (layer == NUM_LAYERS - 1) break;
 
         // Apply activation function to S to get Z
-        matrixElementApply(z, sigmoid);
+        //matrixElementApply(z, sigmoid);
 
         // Save Z because this is sigmoid(S) and is needed in back propagation
         ZTS[layer] = z;

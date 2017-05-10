@@ -1,7 +1,7 @@
 OBJECTS = par.o matrix.o
 EXEC = pann
 
-ALL_INCLUDES = -I/usr/local/cuda-8.0/include/
+ALL_INCLUDES = -L/usr/local/cuda-8.0/lib64/
 ALL_LIBS = -lm -lcublas -lcudart
 
 C_INCLUDES = -I/usr/local/cuda-8.0/include/

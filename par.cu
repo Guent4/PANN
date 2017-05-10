@@ -16,11 +16,13 @@
 
 #include "matrix.h"
 
+#define UINT_DIV_CEIL(X,Y) (1 + (((X) - 1) / (Y)))
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
 #define BILLION 1000000000
 
 #define TOTAL 8200
-
+// 1d block size
+#define BLOCK_SIZE 256
 
 //ANN method
 void testAccuracy(int testSize);
@@ -32,6 +34,9 @@ void freeMatrices();
 uint64_t get_dt(struct timespec *start, struct timespec *end);
 
 void printVector(float *vector, int len);
+
+// cuda
+__global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols);
 
 static cublasHandle_t handle;
 static cublasStatus_t stat;
@@ -84,7 +89,7 @@ int main(int argc, char **argv)
     uint64_t total_ff = 0;
     uint64_t total_bp = 0;
 
-    for (int outer = 0; outer < 100; outer++) {
+    for (int outer = 0; outer < 1; outer++) {
 
         for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
             // Retrieve data from csv
@@ -132,7 +137,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
     int i, j;
 
 
-    FILE* fstream = fopen("./dating/CleanedAndNoramlizedData.csv", "r");
+    FILE* fstream = fopen("./dating/temp.csv", "r");
 
     if (fstream == NULL) {
         printf("\n file opening failed ");
@@ -210,53 +215,117 @@ Matrix *feedForward(Matrix *in)
     float *dev_wts;
     float *dev_in;
     float *dev_z;
+    float *dev_z_trans;
     cudaMalloc((void**)&dev_wts, wts_max*sizeof(float));
     cudaMalloc((void**)&dev_in, in->rows*max_cols*sizeof(float));
     cudaMalloc((void**)&dev_z, in->rows*max_cols*sizeof(float));
+    cudaMalloc((void**)&dev_z_trans, in->rows*max_cols*sizeof(float));
 
-    float alpha = 1;
-    float beta = 0;
+    const float alpha = 1;
+    const float beta = 0;
 
 
-    Matrix *z = NULL;
-    for (int layer = 0; layer < NUM_LAYERS-1; layer++) {
-        // this will load in transposed
-/*
-        cublasSetMatrix(in->cols, in->rows, sizeof(float),
-                in->m, in->cols, dev_in, in->cols);
+    const int in_rows = in->rows;
+    int in_cols = in->cols;
 
+    int wts_cols = WTS[0]->cols;
+    int wts_rows = WTS[0]->rows;
+
+    // this will load in transposed
+    cublasSetMatrix(in->cols, in->rows, sizeof(float),
+            in->m, in->cols, dev_in, in->cols);
+
+    for (int layer = 0; layer < NUM_LAYERS; layer++) {
+
+        wts_cols = WTS[layer]->cols;
+        wts_rows = WTS[layer]->rows;
+
+        if (in_cols != wts_rows) {
+            printf("Error! Dimension mismatch in feedforward\n");
+            exit(1);
+        }
 
         // Load WTS[layer]  transposed
-        cublasSetMatrix(WTS[layer]->cols, WTS[layer]->rows, sizeof(float),
-                WTS[layer]->m, WTS[layer]->cols, dev_wts, WTS[layer]->cols);
+        cublasSetMatrix(wts_cols, wts_rows, sizeof(float),
+                WTS[layer]->m, wts_cols, dev_wts, wts_cols);
 
 
         cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T,
-            in->rows, WTS[layer]->cols, in->cols, &alpha, dev_in, in->cols,
-            dev_wts, WTS[layer]->cols, &beta, dev_z, in->rows);
+            in_rows, wts_cols, in_cols, &alpha, dev_in, in_cols,
+            dev_wts, wts_cols, &beta, dev_z, in_rows);
 
-*/
-
+        // only apply sigmoid if not last layer
+        if (layer == NUM_LAYERS - 1) // last output layer
+            break;
 
         // Multiply Z with W to get S
-        z = matrixMatrixMultiply(in, WTS[layer]);
-        //z = newMatrix(in->rows, WTS[layer]->cols);
+        //z = matrixMatrixMultiply(in, WTS[layer]);
+        //z = newMatrix(in_rows, wts_cols);
+
+        // now dev_z is in_rows x wts_cols (stored in row ordering on device)
+
+
+        //dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+        //dim3 dimGrid(UINT_DIV_CEIL(wts_cols, dimBlock.x), UINT_DIV_CEIL(in_rows , dimBlock.y));
+
+        int blocks = UINT_DIV_CEIL((wts_cols*in_rows), BLOCK_SIZE);
+
+        //printf("Launching kernel with dim y: %d, dim x: %d\n", UINT_DIV_CEIL(wts_cols, dimBlock.x), UINT_DIV_CEIL(in_rows , dimBlock.y));
+
+
+        cuda_matirxElementSigmoid<<<blocks, BLOCK_SIZE>>>(dev_z, in_rows, wts_cols);
+
+
+
+        // stupid transpose to put it into col ordering
+        // dev_z is dev_z[in_rows][wts_cols] (stored in row ordering on device)
+        // now dev_z_trans is wts_cols x in_rows (stored in row ordering on device)
+
+
+        cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, wts_cols, in_rows, &alpha,
+                dev_z, in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
+
+        // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
+
+
+        cudaMemcpy(ZTS[layer]->m, dev_z_trans, in_rows*wts_cols, cudaMemcpyDeviceToHost); //eventually make async
+
+
 
         // Apply activation function to S to get Z
-        matrixElementApply(z, sigmoid);
+        //matrixElementApply(z, sigmoid);
 
         // Save Z because this is sigmoid(S) and is needed in back propagation
-        ZTS[layer] = z;
+        //ZTS[layer] = z;
 
         // Update values for next iteration
-        in = z;
+        //in = z;
+
+        //swap
+        float *tmp = dev_in;
+        dev_in = dev_z_trans;
+        dev_z_trans = tmp;
+
+        // update col dims
+        in_cols = wts_cols;
     }
 
+    Matrix *z = newMatrix(in_rows, WTS[NUM_LAYERS-1]->cols);
+
+    cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, wts_cols, in_rows, &alpha, dev_z,
+        in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
+
+    // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
+    cudaMemcpy(z->m, dev_z_trans, in_rows*wts_cols, cudaMemcpyDeviceToHost); //eventually make async
+
+
     cudaFree (dev_wts);
+    cudaFree (dev_in);
     cudaFree (dev_z);
+    cudaFree (dev_z_trans);
 
     // feed through last layer
-    return matrixMatrixMultiply(in, WTS[NUM_LAYERS-1]);
+    return z;
 }
 
 
@@ -385,4 +454,17 @@ void printVector(float *vector, int len)
 uint64_t get_dt(struct timespec *start, struct timespec *end)
 {
     return BILLION*(end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec);
+}
+
+
+__global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols)
+{
+    int tid = blockIdx.x *blockDim.x + threadIdx.x;
+
+
+    if (tid < rows*cols)
+    {
+        A[IDX2C(tid%rows, tid/rows, rows)] = 1.0/(1.0 + expf(-1*IDX2C(tid%rows, tid/rows, rows)));
+    }
+
 }
