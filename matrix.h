@@ -24,18 +24,28 @@ Matrix *newMatrix(int m, int n);
 void freeMatrix(Matrix *matrix);
 
 // Matrix helpters
+Matrix *matrixTranspose(Matrix *in);
 Matrix *matrixMatrixMultiply(Matrix *A, Matrix *B);
 Matrix *matrixMatrixElementSub(Matrix *A, Matrix *B);
-float matrixReduceSquared(Matrix *A);
+Matrix *matrixMatrixElementAdd(Matrix *A, Matrix *B);
+
+float matrixReduceSumPow(Matrix *A, int exponent);
 void printMatrix(Matrix *matrix);
 void printMatrixMatlab(Matrix *matrix);
 
-
+Matrix *matrixMatrixElementMultiply(Matrix *A, Matrix *B);
 void matrixElementApply(Matrix *A, float(*f)(float));
 
 //matrix element apply methods
+float setTo0(float val);
 float setTo1(float val);
 float setToRand(float val);
 float sigmoid(float val);
+float sigmoidDerivWhenAlreadyHaveSigmoid(float val);
+
+void matrixElementApplyArg(Matrix *A, float(*f)(float, void*), void *arg);
+float setToConst(float val, void *c);
+float multByConst(float val, void *c);
+
 
 #endif

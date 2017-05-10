@@ -44,6 +44,25 @@ Matrix *matrixMatrixElementSub(Matrix *A, Matrix *B) {
 }
 
 
+Matrix *matrixMatrixElementAdd(Matrix *A, Matrix *B) {
+    if (A->rows != B->rows || A->cols != B->cols) {
+        printf("Dimension mismatch %dx%d %dx%d- matrixMatrixElementSub\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
+
+    Matrix *C = newMatrix(A->rows, A->cols);
+
+
+    for (int i = 0; i < A->rows; i++) {
+        for (int j = 0; j < A->cols; j++) {
+            C->m[IDXM(C, i, j)] = A->m[IDXM(A, i, j)] + B->m[IDXM(B, i, j)];
+        }
+    }
+
+    return C;
+}
+
+
 
 
 Matrix *matrixMatrixMultiply(Matrix *A, Matrix *B)
@@ -70,14 +89,32 @@ Matrix *matrixMatrixMultiply(Matrix *A, Matrix *B)
 }
 
 
+Matrix *matrixMatrixElementMultiply(Matrix *A, Matrix *B)
+{
+    if (A->rows != B->rows || A->cols != B->cols) {
+        printf("Dimension mismatch: %dx%d %dx%d - matrixMatrixElementMultiply\n", A->rows, A->cols, B->rows, B->cols);
+        exit(1);
+    }
 
-float matrixReduceSquared(Matrix *A)
+
+    Matrix* C = newMatrix(A->rows, A->cols);
+    for (int i = 0; i < A->rows; i++) {
+        for (int j = 0; j < A->cols; j++) {
+            C->m[IDXM(C, i, j)] = (A->m[IDXM(A, i, j)])*(B->m[IDXM(B, i, j)]);
+        }
+    }
+
+    return C;
+}
+
+
+float matrixReduceSumPow(Matrix *A, int exponent)
 {
     float sum = 0.0;
 
     for (int i = 0; i < A->rows; i++) {
         for (int j = 0; j < A->cols; j++) {
-            sum += pow(A->m[IDXM(A, i, j)], 2);
+            sum += pow(A->m[IDXM(A, i, j)], exponent);
         }
     }
 
@@ -86,6 +123,20 @@ float matrixReduceSquared(Matrix *A)
 
 
 
+Matrix *matrixTranspose(Matrix *in)
+{
+  // Allocate the space for the new array
+  Matrix *A = newMatrix(in->cols, in->rows);
+
+  for (int i = 0; i < in->cols; i++) {
+    for (int j = 0; j < in->rows; j++) {
+      A->m[IDXM(A, i, j)] = in->m[IDXM(in, j, i)];
+    }
+  }
+
+  return A;
+}
+
 
 void matrixElementApply(Matrix *A, float(*f)(float)) {
     for (int i = 0; i < A->rows; i++) {
@@ -93,6 +144,34 @@ void matrixElementApply(Matrix *A, float(*f)(float)) {
             A->m[IDXM(A,i,j)] = f(A->m[IDXM(A,i,j)]);
         }
     }
+}
+
+
+void matrixElementApplyArg(Matrix *A, float(*f)(float, void*), void *arg) {
+    for (int i = 0; i < A->rows; i++) {
+        for (int j = 0; j < A->cols; j++) {
+            A->m[IDXM(A,i,j)] = f(A->m[IDXM(A,i,j)], arg);
+        }
+    }
+}
+
+
+float setToConst(float val, void *c)
+{
+    return *((float*)c);
+}
+
+
+
+float multByConst(float val, void *c)
+{
+    return val*(*((float*)c));
+}
+
+
+float setTo0(float val)
+{
+    return 0;
 }
 
 
@@ -114,6 +193,10 @@ float sigmoid(float val) {
 }
 
 
+float sigmoidDerivWhenAlreadyHaveSigmoid(float val)
+{
+    return val * (1 - val);
+}
 
 
 void printMatrix(Matrix *matrix)

@@ -19,6 +19,7 @@
 //ANN method
 void testAccuracy(int testSize);
 Matrix *feedForward(Matrix *in);
+void backPropagation(Matrix *estimation);
 void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
 void initializeMatrices();
 void freeMatrices();
@@ -38,7 +39,10 @@ static Matrix *YTS;
 static Matrix **WTS;
 static Matrix **ZTS;
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
+    //srand(time(NULL));
+    srand(1);
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
     ETA = (argc > 3) ? atof(argv[3]) : 0.01;
@@ -60,24 +64,27 @@ int main(int argc, char **argv) {
     printf("test accuracy\n");
     testAccuracy(testSize);
     // printMatrix(WTS[1]);
-    /*
-    int iter;
-    int maxIters = (TOTAL - testSize) / N;
-    for (iter = 0; iter < maxIters; iter++) {
-        // Retrieve data from csv
-        readInXY(iter*N, iter*N + N, XTS, YTS);
 
-        Matrix *out = (Matrix *)malloc(sizeof(Matrix));
-        feedForward(XTS, out);
-        backPropagation(out);
+    for (int outer = 0; outer < 100; outer++) {
 
-        // printf("\n\n\n");
-        testAccuracy(testSize);
-        // printMatrix(WTS[1]);
+        for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
+            // Retrieve data from csv
+            readInXY(iter*N, iter*N + N, XTS, YTS);
 
-        freeMatrix(out);
+            Matrix *out = feedForward(XTS);
+            backPropagation(out);
+
+            // printf("\n\n\n");
+            if (iter % 20 == 0) {
+                testAccuracy(testSize);
+                // printMatrix(WTS[2]);
+            }
+            // printMatrix(WTS[1]);
+
+            freeMatrix(out);
+        }
     }
-    */
+
 
     freeMatrices();
 
@@ -124,6 +131,7 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
 
         i++;
     }
+    fclose(fstream);
 
     // printMatrixMatlab(XTS);
 }
@@ -144,7 +152,11 @@ void testAccuracy(int testSize)
     // Get the error
     Matrix *delta = matrixMatrixElementSub(testOut, testY);
 
-    float error = matrixReduceSquared(delta);
+    Matrix *trans = matrixTranspose(delta);
+    printMatrix(trans);
+    freeMatrix(trans);
+
+    float error = matrixReduceSumPow(delta, 2);
     printf("Error: %f\n", error);
 
     freeMatrix(delta);
@@ -178,6 +190,60 @@ Matrix *feedForward(Matrix *in)
 }
 
 
+
+void backPropagation(Matrix *estimation)
+{
+
+    // Backprop
+    Matrix **D = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix *));
+
+    for (int layer = NUM_LAYERS - 1; layer >= 0; layer--) {
+
+
+        if (layer == NUM_LAYERS - 1) {
+            Matrix *Dtrans = matrixMatrixElementSub(estimation, YTS);
+            D[layer] = matrixTranspose(Dtrans);
+            freeMatrix(Dtrans);
+        } else {
+
+            matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
+            Matrix *F = matrixTranspose(ZTS[layer]);
+
+            Matrix *WD = matrixMatrixMultiply(WTS[layer + 1], D[layer + 1]);
+
+            D[layer] = matrixMatrixElementMultiply(F, WD);
+
+            freeMatrix(WD);
+            freeMatrix(F);
+        }
+    }
+
+    // Weight Updates
+    for (int layer = 0; layer < NUM_LAYERS; layer++) {
+        Matrix *DZ;
+        if (layer == 0) {
+            DZ = matrixMatrixMultiply(D[layer], XTS);
+        } else {
+            DZ = matrixMatrixMultiply(D[layer], ZTS[layer - 1]);
+        }
+
+        Matrix *wUpdates = matrixTranspose(DZ);
+        float neta = -1*ETA;
+        matrixElementApplyArg(wUpdates, multByConst, &neta);
+        WTS[layer] = matrixMatrixElementAdd(WTS[layer], wUpdates);
+
+        freeMatrix(wUpdates);
+        freeMatrix(DZ);
+    }
+
+    // Free temporary matrices
+    for (int i = 0; i < NUM_LAYERS; i++) {
+        freeMatrix(D[i]);
+    }
+}
+
+
+
 void initializeMatrices()
 {
 
@@ -195,13 +261,15 @@ void initializeMatrices()
         WTS[i] = newMatrix(numRows, LAYER_SIZES[i]);
 
         // The in->firstHidden and lastHidden->out have weights of 1
-        if (i == 0 || i == NUM_LAYERS-1) {
+        if (i == 0) {
+            matrixElementApply(WTS[i], setTo0);
+        } else if (i == NUM_LAYERS-1) {
             matrixElementApply(WTS[i], setTo1);
+            //WTS[i]->m[IDXM(WTS[i],0,0)] = 1;
         } else {
             matrixElementApply(WTS[i], setToRand);
         }
-        // printf("WEIGHT %d\n", i);
-        // printMatrixMatlab(matrix);
+
     }
 
     // Create S matrices

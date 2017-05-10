@@ -250,7 +250,8 @@ void matrixMatrixElementDiff(Matrix *A, Matrix *B, Matrix *C) {
     C->cols = A->cols;
 }
 
-void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C) {
+void matrixMatrixElementMultiply(Matrix *A, Matrix *B, Matrix *C)
+{
     if (A->rows != B->rows || A->cols != B->cols) {
         printf("Dimension mismatch: %dx%d %dx%d - matrixMatrixElementMultiply\n", A->rows, A->cols, B->rows, B->cols);
         exit(1);
@@ -383,7 +384,7 @@ void initializeMatrices() {
             matrixElementApply(WTS[i], setTo0);
         } else if (i == NUM_LAYERS-1) {
             // matrixElementApply(WTS[i], setTo1);
-            matrixElementApply(WTS[i], setTo0);
+            matrixElementApply(WTS[i], setTo1);
             WTS[i]->m[0][0] = 1;
         } else {
             matrixElementApply(WTS[i], setToRand);
@@ -539,8 +540,9 @@ void backPropagation(Matrix *estimation) {
     // Backprop
     Matrix **D = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix *));
     for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
-        Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
+
         if (layer == NUM_LAYERS - 1) {
+            Matrix *DTemp = (Matrix *)malloc(sizeof(Matrix));
             Matrix *Dtrans = (Matrix *)malloc(sizeof(Matrix));
             matrixMatrixElementSub(estimation, YTS, Dtrans);
             transpose(Dtrans, DTemp);
@@ -560,7 +562,7 @@ void backPropagation(Matrix *estimation) {
             matrixElementApply(ZTS[layer], sigmoidDerivWhenAlreadyHaveSigmoid);
             Matrix *F = (Matrix *)malloc(sizeof(Matrix));
             transpose(ZTS[layer], F);
-            
+
             Matrix *WD = (Matrix *)malloc(sizeof(Matrix));
             matrixMatrixMultiply(WTS[layer + 1], D[layer + 1], WD);
 
@@ -646,7 +648,7 @@ void testAccuracy(int testSize) {
     // matrixMatrixElementDiff(testOut, testY, delta);
 
     // float errorPerc = matrixReduceSumPow(delta, 1);
-    // printf("Error: %f%%\n", (float)errorPerc*100 / (float)(testSize));    
+    // printf("Error: %f%%\n", (float)errorPerc*100 / (float)(testSize));
 
     freeMatrix(delta);
     freeMatrix(testOut);
@@ -655,6 +657,8 @@ void testAccuracy(int testSize) {
 }
 
 int main(int argc, char** argv) {
+    //srand(time(NULL));
+    srand(1);
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
     ETA = (argc > 3) ? atof(argv[3]) : 0.01;
@@ -676,7 +680,7 @@ int main(int argc, char** argv) {
     // printMatrix(WTS[1]);
 
     int outer;
-    for (outer == 0; outer < 100; outer++) {
+    for (outer = 0; outer < 100; outer++) {
         int iter;
         int maxIters = (TOTAL - testSize) / N;
         for (iter = 0; iter < maxIters; iter++) {
