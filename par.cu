@@ -288,7 +288,7 @@ Matrix *feedForward(Matrix *in)
         // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
 
 
-        cudaMemcpy(ZTS[layer]->m, dev_z_trans, in_rows*wts_cols, cudaMemcpyDeviceToHost); //eventually make async
+        cudaMemcpy(ZTS[layer]->m, dev_z_trans, in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost); //eventually make async
 
 
 
@@ -316,7 +316,7 @@ Matrix *feedForward(Matrix *in)
         in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
 
     // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
-    cudaMemcpy(z->m, dev_z_trans, in_rows*wts_cols, cudaMemcpyDeviceToHost); //eventually make async
+    cudaMemcpy(z->m, dev_z_trans, in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost); //eventually make async
 
 
     cudaFree (dev_wts);

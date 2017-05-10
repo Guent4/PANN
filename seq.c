@@ -177,7 +177,7 @@ Matrix *feedForward(Matrix *in)
         if (layer == NUM_LAYERS - 1) break;
 
         // Apply activation function to S to get Z
-        //matrixElementApply(z, sigmoid);
+        matrixElementApply(z, sigmoid);
 
         // Save Z because this is sigmoid(S) and is needed in back propagation
         ZTS[layer] = z;
