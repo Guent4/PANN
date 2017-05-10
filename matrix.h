@@ -16,6 +16,10 @@ typedef struct {
     float *m;
 } Matrix;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // Matrix constructor
 Matrix *newMatrix(int m, int n);
@@ -47,5 +51,8 @@ void matrixElementApplyArg(Matrix *A, float(*f)(float, void*), void *arg);
 float setToConst(float val, void *c);
 float multByConst(float val, void *c);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

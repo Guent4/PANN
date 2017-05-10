@@ -10,6 +10,8 @@
 #include <float.h>
 #include <time.h>
 #include <unistd.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 #include "matrix.h"
 
@@ -41,8 +43,7 @@ static Matrix **ZTS;
 
 int main(int argc, char **argv)
 {
-    //srand(time(NULL));
-    srand(1);
+    srand(time(NULL));
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
     ETA = (argc > 3) ? atof(argv[3]) : 0.01;
