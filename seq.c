@@ -70,6 +70,7 @@ int main(int argc, char **argv) {
 
     initializeMatrices(testSize);
 
+
     int stop = 0;
     for (int outer = 0; outer < 100000 && stop == 0; outer++) {
         for (int iter = 0; iter < (TOTAL - testSize)/N && stop == 0; iter++) {
@@ -88,14 +89,14 @@ int main(int argc, char **argv) {
     }
 
     printf("Stopped %d\n", stop);
-    
+
     // Stop timer
     clock_gettime(CLOCK_MONOTONIC, &end);
-    
+
     // Calculate the time it took to perform calculation
     diff = BILLION * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec;
     diff = diff / MILLION;   // To get milliseconds from nanoseconds
-    printf("elapsed time = %llu milliseconds\n", (long long unsigned int) diff);    
+    printf("elapsed time = %llu milliseconds\n", (long long unsigned int) diff);
 
 
     freeMatrices();

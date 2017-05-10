@@ -86,10 +86,12 @@ int main(int argc, char **argv)
     // printMatrix(WTS[1]);
 
     struct timespec start, end; //timestamps
+    struct timespec t_start, t_end; //timestamps
     uint64_t total_ff = 0;
     uint64_t total_bp = 0;
 
-    for (int outer = 0; outer < 1; outer++) {
+    clock_gettime(CLOCK_MONOTONIC, &t_start);
+    for (int outer = 0; outer < 100; outer++) {
 
         for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
             // Retrieve data from csv
@@ -116,7 +118,10 @@ int main(int argc, char **argv)
             freeMatrix(out);
         }
     }
+    clock_gettime(CLOCK_MONOTONIC, &t_end);
 
+    float total_rt = get_dt(&t_start, &t_end);
+    printf("RT: %f secs\n", total_rt/BILLION);
     float rt = (float)(total_bp + total_ff);
     printf("Feed Forward: %f%%, Back prop %f%%\n", 100*total_ff/rt, 100*total_bp/rt);
 
