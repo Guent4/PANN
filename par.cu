@@ -69,8 +69,12 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < NUM_LAYERS; i++) {
         LAYER_SIZES[i] = (argc > 6+i) ? strtol(argv[6+i], NULL, 10) : 10;
+        printf("Layer %d size: %d\n", i, LAYER_SIZES[i]);
+
     }
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
+
+    sleep(1);
 
     // init cublas
     stat = cublasCreate(&handle);
@@ -89,13 +93,18 @@ int main(int argc, char **argv)
     struct timespec t_start, t_end; //timestamps
     uint64_t total_ff = 0;
     uint64_t total_bp = 0;
+    uint64_t total_fd = 0;
 
     clock_gettime(CLOCK_MONOTONIC, &t_start);
     for (int outer = 0; outer < 100; outer++) {
 
         for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
             // Retrieve data from csv
+            clock_gettime(CLOCK_MONOTONIC, &start);
             readInXY(iter*N, iter*N + N, XTS, YTS);
+            clock_gettime(CLOCK_MONOTONIC, &end);
+
+            total_fd += get_dt(&start, &end);
 
             clock_gettime(CLOCK_MONOTONIC, &start);
             Matrix *out = feedForward(XTS);
@@ -122,8 +131,8 @@ int main(int argc, char **argv)
 
     float total_rt = get_dt(&t_start, &t_end);
     printf("RT: %f secs\n", total_rt/BILLION);
-    float rt = (float)(total_bp + total_ff);
-    printf("Feed Forward: %f%%, Back prop %f%%\n", 100*total_ff/rt, 100*total_bp/rt);
+    float rt = (float)(total_bp + total_ff + total_fd);
+    printf("Feed Forward: %f%%, Back prop %f%%, File Read: %f%%\n", 100*total_ff/rt, 100*total_bp/rt, 100*total_fd/rt);
 
 
     freeMatrices();
@@ -192,9 +201,9 @@ void testAccuracy(int testSize)
     // Get the error
     Matrix *delta = matrixMatrixElementSub(testOut, testY);
 
-    Matrix *trans = matrixTranspose(delta);
-    printMatrix(trans);
-    freeMatrix(trans);
+    //Matrix *trans = matrixTranspose(delta);
+    //printMatrix(trans);
+    //freeMatrix(trans);
 
     float error = matrixReduceSumPow(delta, 2);
     printf("Error: %f\n", error);

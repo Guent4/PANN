@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
 
 
     int stop = 0;
-    for (int outer = 0; outer < 100000 && stop == 0; outer++) {
+    for (int outer = 0; outer < 100 && stop == 0; outer++) {
         for (int iter = 0; iter < (TOTAL - testSize)/N && stop == 0; iter++) {
             // Retrieve data from csv
             readInXY(iter*N, iter*N + N, XTS, YTS);
