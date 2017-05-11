@@ -1,3 +1,4 @@
+
 // Compile:         gcc -Wall par.c -lm
 // Run:             ./a.out <features> <N> <eta> <testSize> <num_layers> <layer1> <layer2> ...
 // Note that regardless if what is put for the last layer, program will overwrite last layer to have size 1
@@ -23,7 +24,7 @@
 float testAccuracy(int testSize);
 Matrix *feedForward(Matrix *in);
 void backPropagation(Matrix *estimation);
-void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
+void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
 void initializeMatrices();
 void freeMatrices();
 
@@ -34,6 +35,8 @@ static int *LAYER_SIZES;
 static float ETA = 0.005;
 static float ERROR_THRESHOLD = 0.01;
 
+static Matrix *XALL;
+static Matrix *YALL;
 static Matrix *XTS;
 static Matrix *YTS;
 static Matrix **WTS;
@@ -70,19 +73,17 @@ int main(int argc, char **argv) {
 
     initializeMatrices(testSize);
 
-
     int stop = 0;
-    for (int outer = 0; outer < 100000 && stop == 0; outer++) {
+    for (int outer = 0; outer < 100 && stop == 0; outer++) {
         for (int iter = 0; iter < (TOTAL - testSize)/N && stop == 0; iter++) {
             // Retrieve data from csv
-            readInXY(iter*N, iter*N + N, XTS, YTS);
+            getXY(iter*N, iter*N + N, XTS, YTS);
 
             Matrix *out = feedForward(XTS);
             backPropagation(out);
 
-            // printf("\n\n\n");
             float error = testAccuracy(testSize);
-            stop = (error < ERROR_THRESHOLD) ? 1 : 0;
+            stop = (error < ERROR_THRESHOLD) ? 0 : 0;
 
             freeMatrix(out);
         }
@@ -104,10 +105,8 @@ int main(int argc, char **argv) {
     free(LAYER_SIZES);
 }
 
-
-
 // starting is included; ending is not
-void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
+void readXY() {
     char buffer[2048];
     char *record, *line;
     int i, j;
@@ -122,31 +121,43 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
 
     i = -1;     // Starts at -1 to account for row of column headers
     while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL) {
-        // Only include interested
-        if (i >= starting && i < ending) {
-            record = strtok(line, ",");
+        if (i == -1) continue;
 
-            // Put each token in the right location (X or Y)
-            j = 0;
-            while (record != NULL) {
-                if (j == 0) {
-                    outputs->m[IDXM(outputs, i-starting, 0)] = atof(record);
-                } else {
-                    inputs->m[IDXM(inputs, i-starting, j-1)] = atof(record);
-                }
+        record = strtok(line, ",");
 
-                j++;
-                record = strtok(NULL, ",");
+        // Put each token in the right location (X or Y)
+        j = 0;
+        while (record != NULL) {
+            if (j == 0) {
+                XALL->m[IDXM(XALL, i, 0)] = atof(record);
+            } else {
+                YALL->m[IDXM(YALL, i, j-1)] = atof(record);
             }
+
+            j++;
+            record = strtok(NULL, ",");
         }
 
         i++;
     }
-    fclose(fstream);
 
-    // printMatrixMatlab(XTS);
+    fclose(fstream);
 }
 
+void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
+    int i, j;
+    for (i = 0; i < ending - starting; i++) {
+        for (j = 0; j < FEATURES; j++) {
+            inputs->m[IDXM(inputs, i, j)] = XALL->m[IDXM(XALL, starting + i, j)];
+        }
+        outputs->m[IDXM(outputs, i, 0)] = YALL->m[IDXM(YALL, starting + i, 0)]; 
+    }
+
+    inputs->rows = ending - starting;
+    inputs->cols = XALL->cols;
+    outputs->rows = ending - starting;
+    outputs->cols = 1;
+}
 
 float testAccuracy(int testSize) {
     // Get the output
@@ -166,7 +177,6 @@ float testAccuracy(int testSize) {
 
     return error;
 }
-
 
 Matrix *feedForward(Matrix *in) {
     Matrix *z = NULL;
@@ -189,8 +199,6 @@ Matrix *feedForward(Matrix *in) {
 
     return z;
 }
-
-
 
 void backPropagation(Matrix *estimation) {
     // Backprop
@@ -241,13 +249,14 @@ void backPropagation(Matrix *estimation) {
     }
 }
 
-
-
 void initializeMatrices(int testSize) {
-	// Create input
-    XTS = newMatrix(N, FEATURES);
+    // Get all data from csv
+    XALL = newMatrix(TOTAL, FEATURES);
+    YALL = newMatrix(TOTAL, 1);
+    readXY();
 
-	// Create output
+	// Create input and output matrix for batch
+    XTS = newMatrix(N, FEATURES);
     YTS = newMatrix(N, 1);
 
     // Create weight matrices
@@ -257,16 +266,14 @@ void initializeMatrices(int testSize) {
 
         WTS[i] = newMatrix(numRows, LAYER_SIZES[i]);
 
-        // The in->firstHidden and lastHidden->out have weights of 1
+        // The in->firstHidden and lastHidden->out initially have weights of 0 and 1
         if (i == 0) {
             matrixElementApply(WTS[i], setTo0);
         } else if (i == NUM_LAYERS-1) {
             matrixElementApply(WTS[i], setTo1);
-            //WTS[i]->m[IDXM(WTS[i],0,0)] = 1;
         } else {
             matrixElementApply(WTS[i], setToRand);
         }
-
     }
 
     // Create S matrices
@@ -280,12 +287,14 @@ void initializeMatrices(int testSize) {
     testY = newMatrix(testSize, 1);
 
     // Retrieve test data from csv
-    readInXY(TOTAL-testSize, TOTAL, testX, testY);
+    getXY(TOTAL-testSize, TOTAL, testX, testY);
 }
-
 
 void freeMatrices() {
     // Free X, Y
+    freeMatrix(XALL);
+    freeMatrix(YALL);
+
     freeMatrix(XTS);
     freeMatrix(YTS);
 
