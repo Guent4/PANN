@@ -68,10 +68,10 @@ int main(int argc, char **argv) {
     }
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
+    initializeMatrices(testSize);
+    
     // Start timer
     clock_gettime(CLOCK_MONOTONIC, &start);
-
-    initializeMatrices(testSize);
 
     int stop = 0;
     for (int outer = 0; outer < 100 && stop == 0; outer++) {
