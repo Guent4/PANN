@@ -14,6 +14,7 @@ typedef struct {
     int rows;
     int cols;
     float *m;
+    int subMatrix;
 } Matrix;
 
 #ifdef __cplusplus
@@ -23,6 +24,7 @@ extern "C" {
 
 // Matrix constructor
 Matrix *newMatrix(int m, int n);
+Matrix *newMatrixSub(int m, int n);
 
 // Matrix desctructor
 void freeMatrix(Matrix *matrix);

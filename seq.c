@@ -32,7 +32,7 @@ static int N;
 static int FEATURES;
 static int NUM_LAYERS;
 static int *LAYER_SIZES;
-static float ETA = 0.005;
+static float ETA;
 static float ERROR_THRESHOLD = 0.01;
 
 static Matrix *XALL;
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
             backPropagation(out);
 
             float error = testAccuracy(testSize);
-            stop = (error < ERROR_THRESHOLD) ? 0 : 0;
+            stop = (error < ERROR_THRESHOLD) ? 1 : 0;
 
             freeMatrix(out);
         }
@@ -98,7 +98,6 @@ int main(int argc, char **argv) {
     diff = BILLION * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec;
     diff = diff / MILLION;   // To get milliseconds from nanoseconds
     printf("elapsed time = %llu milliseconds\n", (long long unsigned int) diff);
-
 
     freeMatrices();
 
@@ -145,13 +144,8 @@ void readXY() {
 }
 
 void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
-    int i, j;
-    for (i = 0; i < ending - starting; i++) {
-        for (j = 0; j < FEATURES; j++) {
-            inputs->m[IDXM(inputs, i, j)] = XALL->m[IDXM(XALL, starting + i, j)];
-        }
-        outputs->m[IDXM(outputs, i, 0)] = YALL->m[IDXM(YALL, starting + i, 0)]; 
-    }
+    inputs->m = &(XALL->m[IDXM(XALL, starting, 0)]);
+    outputs->m = &(YALL->m[IDXM(YALL, starting, 0)]);
 
     inputs->rows = ending - starting;
     inputs->cols = XALL->cols;
@@ -256,8 +250,8 @@ void initializeMatrices(int testSize) {
     readXY();
 
 	// Create input and output matrix for batch
-    XTS = newMatrix(N, FEATURES);
-    YTS = newMatrix(N, 1);
+    XTS = newMatrixSub(N, FEATURES);
+    YTS = newMatrixSub(N, 1);
 
     // Create weight matrices
     WTS = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix **));
@@ -283,11 +277,13 @@ void initializeMatrices(int testSize) {
     }
 
     // Get test data
-    testX = newMatrix(testSize, FEATURES);
-    testY = newMatrix(testSize, 1);
+    testX = newMatrixSub(testSize, FEATURES);
+    testY = newMatrixSub(testSize, 1);
 
     // Retrieve test data from csv
     getXY(TOTAL-testSize, TOTAL, testX, testY);
+
+    printf("asdfsadfsadf\n");
 }
 
 void freeMatrices() {

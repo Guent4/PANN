@@ -13,13 +13,23 @@ Matrix *newMatrix(int m, int n)
     A->m = (float *)malloc(sizeof(float[m][n]));
     A->rows = m;
     A->cols = n;
+    A->subMatrix = 0;
+    return A;
+}
+
+Matrix *newMatrixSub(int m, int n)
+{
+    Matrix *A = (Matrix *)malloc(sizeof(Matrix));
+    A->rows = m;
+    A->cols = n;
+    A->subMatrix = 1;
     return A;
 }
 
 // deconstructor
 void freeMatrix(Matrix *matrix)
 {
-    free(matrix->m);
+    if (matrix->subMatrix == 0) free(matrix->m);
     free(matrix);
 }
 
