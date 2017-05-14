@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
     uint64_t total_fd = 0;
 
     // Start timer
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    clock_gettime(CLOCK_MONOTONIC, &t_start);
 
 
     bool stop = false;
@@ -403,7 +403,6 @@ void initializeMatrices(int testSize) {
     // Retrieve test data from csv
     getXY(TOTAL-testSize, TOTAL, testX, testY);
 
-    printf("asdfsadfsadf\n");
 }
 
 void freeMatrices() {

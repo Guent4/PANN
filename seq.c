@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     initializeMatrices(testSize);
 
     // Start timer
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    clock_gettime(CLOCK_MONOTONIC, &t_start);
 
     float total_rt = get_dt(&t_start, &t_end);
     printf("RT: %f secs\n", total_rt/BILLION);
