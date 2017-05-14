@@ -6,6 +6,7 @@ ALL_LIBS = -lm -lcublas -lcudart
 
 C_INCLUDES = -I/usr/local/cuda-8.0/include/
 C_LIBS = -lcublas -lcudart
+C_FLAGS = -g
 
 COMPUTE_VER ?= sm_52
 COMPUTE = -arch=$(COMPUTE_VER)
@@ -23,7 +24,7 @@ all: $(OBJECTS) gpuCode.o
 	g++ $(OBJECTS) gpuCode.o $(ALL_INCLUDES) $(ALL_LIBS) -o $(EXEC)
 
 %.o: %.c
-	gcc -std=gnu99 -c -O3 -Wall $(C_INCLUDES) $(C_LIBS) $< -o $@
+	gcc -std=gnu99 -c $(C_FLAGS) -O3 -Wall $(C_INCLUDES) $(C_LIBS) $< -o $@
 
 %.o: %.cu
 	$(NVCC) $(COMPUTE) -O3 -dc -D_FORCE_INLINES $< -o $@

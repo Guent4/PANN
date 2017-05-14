@@ -25,11 +25,12 @@
 #define BLOCK_SIZE 256
 
 //ANN method
-void testAccuracy(int testSize);
+float testAccuracy(int testSize);
 Matrix *feedForward(Matrix *in);
 void backPropagation(Matrix *estimation);
-void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
-void initializeMatrices();
+void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
+void readXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
+void initializeMatrices(int testSize);
 void freeMatrices();
 uint64_t get_dt(struct timespec *start, struct timespec *end);
 
@@ -46,12 +47,17 @@ static int FEATURES;
 static int NUM_LAYERS;
 static int *LAYER_SIZES;
 static float ETA = 0.005;
+static float ERROR_THRESHOLD = 0.01;
 
-
+static Matrix *XALL;
+static Matrix *YALL;
 static Matrix *XTS;
 static Matrix *YTS;
 static Matrix **WTS;
 static Matrix **ZTS;
+
+static Matrix *testX;
+static Matrix *testY;
 
 int main(int argc, char **argv)
 {
@@ -83,11 +89,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    initializeMatrices();
+    initializeMatrices(testSize);
 
-    printf("test accuracy\n");
-    testAccuracy(testSize);
-    // printMatrix(WTS[1]);
 
     struct timespec start, end; //timestamps
     struct timespec t_start, t_end; //timestamps
@@ -96,14 +99,15 @@ int main(int argc, char **argv)
     uint64_t total_fd = 0;
 
     clock_gettime(CLOCK_MONOTONIC, &t_start);
-    for (int outer = 0; outer < 100; outer++) {
 
-        for (int iter = 0; iter < (TOTAL - testSize)/N; iter++) {
+    float err = 2*ERROR_THRESHOLD; //start it larger than error thresh
+    for (int outer = 0; (outer < 100) && (err > ERROR_THRESHOLD); outer++) {
+
+        for (int iter = 0; (iter < (TOTAL - testSize)/N) && (err > ERROR_THRESHOLD); iter++) {
             // Retrieve data from csv
             clock_gettime(CLOCK_MONOTONIC, &start);
-            readInXY(iter*N, iter*N + N, XTS, YTS);
+            getXY(iter*N, iter*N + N, XTS, YTS);
             clock_gettime(CLOCK_MONOTONIC, &end);
-
             total_fd += get_dt(&start, &end);
 
             clock_gettime(CLOCK_MONOTONIC, &start);
@@ -114,19 +118,14 @@ int main(int argc, char **argv)
             clock_gettime(CLOCK_MONOTONIC, &start);
             backPropagation(out);
             clock_gettime(CLOCK_MONOTONIC, &end);
-
             total_bp += get_dt(&start, &end);
 
-            // printf("\n\n\n");
-            if (iter % 20 == 0) {
-                testAccuracy(testSize);
-                // printMatrix(WTS[2]);
-            }
-            // printMatrix(WTS[1]);
+            err = testAccuracy(testSize);
 
             freeMatrix(out);
         }
     }
+
     clock_gettime(CLOCK_MONOTONIC, &t_end);
 
     float total_rt = get_dt(&t_start, &t_end);
@@ -142,10 +141,8 @@ int main(int argc, char **argv)
 }
 
 
-
 // starting is included; ending is not
-void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
-{
+void readXY() {
     char buffer[2048];
     char *record, *line;
     int i, j;
@@ -154,47 +151,50 @@ void readInXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
     FILE* fstream = fopen("./dating/temp.csv", "r");
 
     if (fstream == NULL) {
-        printf("\n file opening failed ");
+        printf("\n file opening failed \n");
         exit(1);
     }
 
     i = -1;     // Starts at -1 to account for row of column headers
     while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL) {
-        // Only include interested
-        if (i >= starting && i < ending) {
-            record = strtok(line, ",");
+        if (i == -1) continue;
 
-            // Put each token in the right location (X or Y)
-            j = 0;
-            while (record != NULL) {
-                if (j == 0) {
-                    outputs->m[IDXM(outputs, i-starting, 0)] = atof(record);
-                } else {
-                    inputs->m[IDXM(inputs, i-starting, j-1)] = atof(record);
-                }
+        record = strtok(line, ",");
 
-                j++;
-                record = strtok(NULL, ",");
+        // Put each token in the right location (X or Y)
+        j = 0;
+        while (record != NULL) {
+            if (j == 0) {
+                XALL->m[IDXM(XALL, i, 0)] = atof(record);
+            } else {
+                YALL->m[IDXM(YALL, i, j-1)] = atof(record);
             }
+
+            j++;
+            record = strtok(NULL, ",");
         }
 
         i++;
     }
-    fclose(fstream);
 
-    // printMatrixMatlab(XTS);
+    fclose(fstream);
 }
 
 
-void testAccuracy(int testSize)
+void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
 {
-    // Get test data
-    Matrix *testX = newMatrix(testSize, FEATURES);
-    Matrix *testY = newMatrix(testSize, 1);
+    inputs->m = &(XALL->m[IDXM(XALL, starting, 0)]);
+    outputs->m = &(YALL->m[IDXM(YALL, starting, 0)]);
 
-    // Retrieve test data from csv
-    readInXY(TOTAL-testSize, TOTAL, testX, testY);
+    inputs->rows = ending - starting;
+    inputs->cols = XALL->cols;
+    outputs->rows = ending - starting;
+    outputs->cols = 1;
+}
 
+
+float testAccuracy(int testSize)
+{
     // Get the output
     Matrix *testOut = feedForward(testX);
 
@@ -210,8 +210,8 @@ void testAccuracy(int testSize)
 
     freeMatrix(delta);
     freeMatrix(testOut);
-    freeMatrix(testY);
-    freeMatrix(testX);
+
+    return error;
 }
 
 
@@ -264,6 +264,7 @@ Matrix *feedForward(Matrix *in)
                 WTS[layer]->m, wts_cols, dev_wts, wts_cols);
 
 
+        // multiply
         cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T,
             in_rows, wts_cols, in_cols, &alpha, dev_in, in_cols,
             dev_wts, wts_cols, &beta, dev_z, in_rows);
@@ -272,21 +273,11 @@ Matrix *feedForward(Matrix *in)
         if (layer == NUM_LAYERS - 1) // last output layer
             break;
 
-        // Multiply Z with W to get S
-        //z = matrixMatrixMultiply(in, WTS[layer]);
-        //z = newMatrix(in_rows, wts_cols);
-
-        // now dev_z is in_rows x wts_cols (stored in row ordering on device)
-
-
-        //dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-        //dim3 dimGrid(UINT_DIV_CEIL(wts_cols, dimBlock.x), UINT_DIV_CEIL(in_rows , dimBlock.y));
 
         int blocks = UINT_DIV_CEIL((wts_cols*in_rows), BLOCK_SIZE);
 
         //printf("Launching kernel with dim y: %d, dim x: %d\n", UINT_DIV_CEIL(wts_cols, dimBlock.x), UINT_DIV_CEIL(in_rows , dimBlock.y));
 
-        cudaDeviceSynchronize();
         cuda_matirxElementSigmoid<<<blocks, BLOCK_SIZE>>>(dev_z, in_rows, wts_cols);
 
 
@@ -294,26 +285,11 @@ Matrix *feedForward(Matrix *in)
         // stupid transpose to put it into col ordering
         // dev_z is dev_z[in_rows][wts_cols] (stored in row ordering on device)
         // now dev_z_trans is wts_cols x in_rows (stored in row ordering on device)
-
-
         cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, wts_cols, in_rows, &alpha,
                 dev_z, in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
 
         // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
-
-
         cudaMemcpy(ZTS[layer]->m, dev_z_trans, in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost); //eventually make async
-
-
-
-        // Apply activation function to S to get Z
-        //matrixElementApply(z, sigmoid);
-
-        // Save Z because this is sigmoid(S) and is needed in back propagation
-        //ZTS[layer] = z;
-
-        // Update values for next iteration
-        //in = z;
 
         //swap
         float *tmp = dev_in;
@@ -341,7 +317,6 @@ Matrix *feedForward(Matrix *in)
     // feed through last layer
     return z;
 }
-
 
 
 void backPropagation(Matrix *estimation)
@@ -397,14 +372,18 @@ void backPropagation(Matrix *estimation)
 
 
 
-void initializeMatrices()
+void initializeMatrices(int testSize)
 {
+    // Get all data from csv
+    XALL = newMatrix(TOTAL, FEATURES);
+    YALL = newMatrix(TOTAL, 1);
+    readXY();
 
 	// Create input
-    XTS = newMatrix(N, FEATURES);
+    XTS = newMatrixSub(N, FEATURES);
 
 	// Create output
-    YTS = newMatrix(N, 1);
+    YTS = newMatrixSub(N, 1);
 
     // Create weight matrices
     WTS = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix **));
@@ -430,11 +409,22 @@ void initializeMatrices()
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
         ZTS[i] = newMatrix(N, LAYER_SIZES[i]);
     }
+
+    // Get test data
+    testX = newMatrixSub(testSize, FEATURES);
+    testY = newMatrixSub(testSize, 1);
+
+    // Retrieve test data from csv
+    getXY(TOTAL-testSize, TOTAL, testX, testY);
 }
 
 
 void freeMatrices()
 {
+    // Free X, Y
+    freeMatrix(XALL);
+    freeMatrix(YALL);
+
     // Free X, Y
     freeMatrix(XTS);
     freeMatrix(YTS);
@@ -450,6 +440,9 @@ void freeMatrices()
         freeMatrix(ZTS[i]);
     }
     free(ZTS);
+
+    freeMatrix(testY);
+    freeMatrix(testX);
 }
 
 

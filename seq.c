@@ -1,5 +1,11 @@
 
-// Compile:         gcc -Wall par.c -lm
+// Compile:
+/*
+ gcc -std=gnu99 -c -O3 -Wall seq.c -o seq.o
+ gcc -std=gnu99 -c -O3 -Wall matrix.c -o matrix.o
+  g++ seq.o matrix.o -lm -o seq
+*/
+
 // Run:             ./a.out <features> <N> <eta> <testSize> <num_layers> <layer1> <layer2> ...
 // Note that regardless if what is put for the last layer, program will overwrite last layer to have size 1
 
@@ -69,7 +75,7 @@ int main(int argc, char **argv) {
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
     initializeMatrices(testSize);
-    
+
     // Start timer
     clock_gettime(CLOCK_MONOTONIC, &start);
 
@@ -105,7 +111,8 @@ int main(int argc, char **argv) {
 }
 
 // starting is included; ending is not
-void readXY() {
+void readXY()
+{
     char buffer[2048];
     char *record, *line;
     int i, j;
@@ -143,7 +150,9 @@ void readXY() {
     fclose(fstream);
 }
 
-void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
+
+void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
+{
     inputs->m = &(XALL->m[IDXM(XALL, starting, 0)]);
     outputs->m = &(YALL->m[IDXM(YALL, starting, 0)]);
 
@@ -152,6 +161,7 @@ void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
     outputs->rows = ending - starting;
     outputs->cols = 1;
 }
+
 
 float testAccuracy(int testSize) {
     // Get the output
@@ -242,6 +252,7 @@ void backPropagation(Matrix *estimation) {
         freeMatrix(D[i]);
     }
 }
+
 
 void initializeMatrices(int testSize) {
     // Get all data from csv
