@@ -31,8 +31,9 @@ float testAccuracy(int testSize);
 Matrix *feedForward(Matrix *in);
 void backPropagation(Matrix *estimation);
 void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
-void initializeMatrices();
+void initializeMatrices(int testSize);
 void freeMatrices();
+uint64_t get_dt(struct timespec *start, struct timespec *end);
 
 static int N;
 static int FEATURES;
@@ -52,9 +53,6 @@ static Matrix *testX;
 static Matrix *testY;
 
 int main(int argc, char **argv) {
-    uint64_t diff;
-    struct timespec start, end;
-
     // Set random seed
     srand(time(NULL));
 
@@ -79,34 +77,12 @@ int main(int argc, char **argv) {
     // Start timer
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    int stop = 0;
-    for (int outer = 0; outer < 100 && stop == 0; outer++) {
-        for (int iter = 0; iter < (TOTAL - testSize)/N && stop == 0; iter++) {
-            // Retrieve data from csv
-            getXY(iter*N, iter*N + N, XTS, YTS);
-
-            Matrix *out = feedForward(XTS);
-            backPropagation(out);
-
-            float error = testAccuracy(testSize);
-            stop = (error < ERROR_THRESHOLD) ? 1 : 0;
-
-            freeMatrix(out);
-        }
-    }
-
-    printf("Stopped %d\n", stop);
-
-    // Stop timer
-    clock_gettime(CLOCK_MONOTONIC, &end);
-
-    // Calculate the time it took to perform calculation
-    diff = BILLION * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec;
-    diff = diff / MILLION;   // To get milliseconds from nanoseconds
-    printf("elapsed time = %llu milliseconds\n", (long long unsigned int) diff);
+    float total_rt = get_dt(&t_start, &t_end);
+    printf("RT: %f secs\n", total_rt/BILLION);
+    float rt = (float)(total_bp + total_ff + total_fd);
+    printf("Feed Forward: %f%%, Back prop %f%%, File Read: %f%%\n", 100*total_ff/rt, 100*total_bp/rt, 100*total_fd/rt);
 
     freeMatrices();
-
     free(LAYER_SIZES);
 }
 

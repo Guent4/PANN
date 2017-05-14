@@ -6,7 +6,7 @@ ALL_LIBS = -lm -lcublas -lcudart
 
 C_INCLUDES = -I/usr/local/cuda-8.0/include/
 C_LIBS = -lcublas -lcudart
-C_FLAGS = -g
+C_FLAGS = 
 
 COMPUTE_VER ?= sm_52
 COMPUTE = -arch=$(COMPUTE_VER)

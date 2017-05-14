@@ -1,3 +1,7 @@
+// Compile:         gcc -Wall par.c -lm
+// Run:             ./a.out <features> <N> <eta> <testSize> <num_layers> <layer1> <layer2> ...
+// Note that regardless if what is put for the last layer, program will overwrite last layer to have size 1
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,39 +16,35 @@
 
 #include "matrix.h"
 
-
 #define UINT_DIV_CEIL(X,Y) (1 + (((X) - 1) / (Y)))
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
+#define BILLION 1000000000
 
+#define TOTAL 8200
 // 1d block size
 #define BLOCK_SIZE 256
-
-
-#define BILLION 1000000000L
-#define MILLION 1000000L
-#define THOUSAND 1000L
-#define TOTAL 8200
 
 //ANN method
 float testAccuracy(int testSize);
 Matrix *feedForward(Matrix *in);
 void backPropagation(Matrix *estimation);
 void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
+void readXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
 void initializeMatrices(int testSize);
-uint64_t get_dt(struct timespec *start, struct timespec *end);
 void freeMatrices();
+uint64_t get_dt(struct timespec *start, struct timespec *end);
 
 // cuda
 __global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols);
+
 static cublasHandle_t handle;
 static cublasStatus_t stat;
-
 
 static int N;
 static int FEATURES;
 static int NUM_LAYERS;
 static int *LAYER_SIZES;
-static float ETA;
+static float ETA = 0.005;
 static float ERROR_THRESHOLD = 0.01;
 
 static Matrix *XALL;
@@ -57,11 +57,9 @@ static Matrix **ZTS;
 static Matrix *testX;
 static Matrix *testY;
 
-int main(int argc, char **argv) {
-
-    // Set random seed
+int main(int argc, char **argv)
+{
     srand(time(NULL));
-
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
     ETA = (argc > 3) ? atof(argv[3]) : 0.01;
@@ -75,10 +73,12 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < NUM_LAYERS; i++) {
         LAYER_SIZES[i] = (argc > 6+i) ? strtol(argv[6+i], NULL, 10) : 10;
+        printf("Layer %d size: %d\n", i, LAYER_SIZES[i]);
+
     }
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
-    initializeMatrices(testSize);
+    sleep(1);
 
     // init cublas
     stat = cublasCreate(&handle);
@@ -87,14 +87,16 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    initializeMatrices(testSize);
+
+
     struct timespec start, end; //timestamps
     struct timespec t_start, t_end; //timestamps
     uint64_t total_ff = 0;
     uint64_t total_bp = 0;
     uint64_t total_fd = 0;
 
-    // Start timer
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    clock_gettime(CLOCK_MONOTONIC, &t_start);
 
 
     bool stop = false;
@@ -124,7 +126,6 @@ int main(int argc, char **argv) {
 
     clock_gettime(CLOCK_MONOTONIC, &t_end);
 
-
     float total_rt = get_dt(&t_start, &t_end);
     printf("RT: %f secs\n", total_rt/BILLION);
     float rt = (float)(total_bp + total_ff + total_fd);
@@ -134,11 +135,12 @@ int main(int argc, char **argv) {
     freeMatrices();
 
     free(LAYER_SIZES);
+
 }
 
+
 // starting is included; ending is not
-void readXY()
-{
+void readXY() {
     char buffer[2048];
     char *record, *line;
     int i, j;
@@ -189,15 +191,17 @@ void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
 }
 
 
-float testAccuracy(int testSize) {
+float testAccuracy(int testSize)
+{
     // Get the output
     Matrix *testOut = feedForward(testX);
 
     // Get the error
     Matrix *delta = matrixMatrixElementSub(testOut, testY);
 
-    Matrix *trans = matrixTranspose(delta);
-    freeMatrix(trans);
+    //Matrix *trans = matrixTranspose(delta);
+    //printMatrix(trans);
+    //freeMatrix(trans);
 
     float error = matrixReduceSumPow(delta, 2);
     printf("Error: %f\n", error);
@@ -208,7 +212,7 @@ float testAccuracy(int testSize) {
     return error;
 }
 
-
+/*
 Matrix *feedForward(Matrix *in)
 {
     int wts_max = 0; //find max number of elements
@@ -311,9 +315,34 @@ Matrix *feedForward(Matrix *in)
     // feed through last layer
     return z;
 }
+*/
+
+Matrix *feedForward(Matrix *in) {
+    Matrix *z = NULL;
+    for (int layer = 0; layer < NUM_LAYERS; layer++) {
+        // Multiply Z with W to get S
+        z = matrixMatrixMultiply(in, WTS[layer]);
+
+        // Note that the output perceptrons do not have activation function
+        if (layer == NUM_LAYERS - 1) break;
+
+        // Apply activation function to S to get Z
+        matrixElementApply(z, sigmoid);
+
+        // Save Z because this is sigmoid(S) and is needed in back propagation
+        ZTS[layer] = z;
+
+        // Update values for next iteration
+        in = z;
+    }
+
+    return z;
+}
 
 
-void backPropagation(Matrix *estimation) {
+void backPropagation(Matrix *estimation)
+{
+
     // Backprop
     Matrix **D = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix *));
 
@@ -363,14 +392,18 @@ void backPropagation(Matrix *estimation) {
 }
 
 
-void initializeMatrices(int testSize) {
+
+void initializeMatrices(int testSize)
+{
     // Get all data from csv
     XALL = newMatrix(TOTAL, FEATURES);
     YALL = newMatrix(TOTAL, 1);
     readXY();
 
-	// Create input and output matrix for batch
+	// Create input
     XTS = newMatrixSub(N, FEATURES);
+
+	// Create output
     YTS = newMatrixSub(N, 1);
 
     // Create weight matrices
@@ -380,14 +413,16 @@ void initializeMatrices(int testSize) {
 
         WTS[i] = newMatrix(numRows, LAYER_SIZES[i]);
 
-        // The in->firstHidden and lastHidden->out initially have weights of 0 and 1
+        // The in->firstHidden and lastHidden->out have weights of 1
         if (i == 0) {
             matrixElementApply(WTS[i], setTo0);
         } else if (i == NUM_LAYERS-1) {
             matrixElementApply(WTS[i], setTo1);
+            //WTS[i]->m[IDXM(WTS[i],0,0)] = 1;
         } else {
             matrixElementApply(WTS[i], setToRand);
         }
+
     }
 
     // Create S matrices
@@ -402,15 +437,16 @@ void initializeMatrices(int testSize) {
 
     // Retrieve test data from csv
     getXY(TOTAL-testSize, TOTAL, testX, testY);
-
-    printf("asdfsadfsadf\n");
 }
 
-void freeMatrices() {
+
+void freeMatrices()
+{
     // Free X, Y
     freeMatrix(XALL);
     freeMatrix(YALL);
 
+    // Free X, Y
     freeMatrix(XTS);
     freeMatrix(YTS);
 
@@ -431,13 +467,22 @@ void freeMatrices() {
 }
 
 
+void printVector(float *vector, int len)
+{
+	printf("------------------------------------\n");
+	int i;
+	for (i = 0; i < len; i++) {
+		printf("%f\n", vector[i]);
+	}
+	printf("------------------------------------\n");
+}
+
 
 
 uint64_t get_dt(struct timespec *start, struct timespec *end)
 {
     return BILLION*(end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec);
 }
-
 
 
 __global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols)
