@@ -3,7 +3,7 @@
 /*
  gcc -std=gnu99 -c -O3 -Wall seq.c -o seq.o
  gcc -std=gnu99 -c -O3 -Wall matrix.c -o matrix.o
-  g++ seq.o matrix.o -lm -o seq
+ g++ seq.o matrix.o -lm -o seq
 */
 
 // Run:             ./a.out <features> <N> <eta> <testSize> <num_layers> <layer1> <layer2> ...
@@ -124,8 +124,7 @@ int main(int argc, char **argv) {
 }
 
 // starting is included; ending is not
-void readXY()
-{
+void readXY() {
     char buffer[2048];
     char *record, *line;
     int i, j;
@@ -164,8 +163,7 @@ void readXY()
 }
 
 
-void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
-{
+void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs) {
     inputs->m = &(XALL->m[IDXM(XALL, starting, 0)]);
     outputs->m = &(YALL->m[IDXM(YALL, starting, 0)]);
 
@@ -306,8 +304,6 @@ void initializeMatrices(int testSize) {
 
     // Retrieve test data from csv
     getXY(TOTAL-testSize, TOTAL, testX, testY);
-
-    printf("asdfsadfsadf\n");
 }
 
 void freeMatrices() {
@@ -335,7 +331,6 @@ void freeMatrices() {
 }
 
 
-uint64_t get_dt(struct timespec *start, struct timespec *end)
-{
+uint64_t get_dt(struct timespec *start, struct timespec *end) {
     return BILLION*(end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec);
 }
