@@ -20,6 +20,7 @@
 #define MILLION 1000000L
 #define THOUSAND 1000L
 #define TOTAL 8200
+#define SEED 97
 
 
 //ANN method
@@ -65,7 +66,7 @@ Matrix **ZTS;
 int main(int argc, char **argv) {
 
     // Set random seed
-    srand(time(NULL));
+    srand(SEED);
 
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
@@ -148,12 +149,12 @@ int main(int argc, char **argv) {
 
     clock_gettime(CLOCK_MONOTONIC, &t_end);
 
-
-    float total_rt = get_dt(&t_start, &t_end);
-    printf("RT: %f secs\n", total_rt/BILLION);
-    float rt = (float)(total_bp + total_ff + total_fd);
-    printf("Feed Forward: %f%%, Back prop %f%%, File Read: %f%%\n", 100*total_ff/rt, 100*total_bp/rt, 100*total_fd/rt);
-
+    if (!myrank) {
+        float total_rt = get_dt(&t_start, &t_end);
+        printf("RT: %f secs\n", total_rt/BILLION);
+        float rt = (float)(total_bp + total_ff + total_fd);
+        printf("Feed Forward: %f%%, Back prop %f%%, File Read: %f%%\n", 100*total_ff/rt, 100*total_bp/rt, 100*total_fd/rt);
+    }
 
     freeMatrices();
 

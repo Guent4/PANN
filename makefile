@@ -8,7 +8,7 @@ C_INCLUDES = -I/usr/local/cuda-8.0/include/
 C_LIBS = -lcublas -lcudart
 C_FLAGS =
 
-COMPUTE_VER ?= sm_52
+COMPUTE_VER ?= sm_30
 COMPUTE = -arch=$(COMPUTE_VER)
 
 NVCC= /usr/local/cuda-8.0/bin/nvcc

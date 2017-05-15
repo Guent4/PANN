@@ -26,6 +26,7 @@
 #define MILLION 1000000L
 #define THOUSAND 1000L
 #define TOTAL 8200
+#define SEED 97
 
 //ANN method
 float testAccuracy(int testSize);
@@ -55,7 +56,7 @@ static Matrix *testY;
 
 int main(int argc, char **argv) {
     // Set random seed
-    srand(time(NULL));
+    srand(SEED);
 
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
