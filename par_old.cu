@@ -1,7 +1,3 @@
-// Compile:         gcc -Wall par.c -lm
-// Run:             ./a.out <features> <N> <eta> <testSize> <num_layers> <layer1> <layer2> ...
-// Note that regardless if what is put for the last layer, program will overwrite last layer to have size 1
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,35 +12,42 @@
 
 #include "matrix.h"
 
+
 #define UINT_DIV_CEIL(X,Y) (1 + (((X) - 1) / (Y)))
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
-#define BILLION 1000000000
 
-#define TOTAL 8200
 // 1d block size
 #define BLOCK_SIZE 256
+
+
+#define BILLION 1000000000L
+#define MILLION 1000000L
+#define THOUSAND 1000L
+#define TOTAL 8200
 
 //ANN method
 float testAccuracy(int testSize);
 Matrix *feedForward(Matrix *in);
 void backPropagation(Matrix *estimation);
 void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
-void readXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
 void initializeMatrices(int testSize);
-void freeMatrices();
 uint64_t get_dt(struct timespec *start, struct timespec *end);
+void freeMatrices();
 
 // cuda
 __global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols);
-
 static cublasHandle_t handle;
 static cublasStatus_t stat;
+static cudaStream_t stream_hd0;
+static cudaStream_t stream_hd1;
+static cudaStream_t stream_dh0;
+
 
 static int N;
 static int FEATURES;
 static int NUM_LAYERS;
 static int *LAYER_SIZES;
-static float ETA = 0.005;
+static float ETA;
 static float ERROR_THRESHOLD = 0.01;
 
 static Matrix *XALL;
@@ -57,9 +60,11 @@ static Matrix **ZTS;
 static Matrix *testX;
 static Matrix *testY;
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
+
+    // Set random seed
     srand(time(NULL));
+
     FEATURES = (argc > 1) ? strtol(argv[1], NULL, 10) : 5;
     N = (argc > 2) ? strtol(argv[2], NULL, 10) : 5;
     ETA = (argc > 3) ? atof(argv[3]) : 0.01;
@@ -73,12 +78,10 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < NUM_LAYERS; i++) {
         LAYER_SIZES[i] = (argc > 6+i) ? strtol(argv[6+i], NULL, 10) : 10;
-        printf("Layer %d size: %d\n", i, LAYER_SIZES[i]);
-
     }
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
-    sleep(1);
+    initializeMatrices(testSize);
 
     // init cublas
     stat = cublasCreate(&handle);
@@ -87,8 +90,10 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    initializeMatrices(testSize);
-
+    // create our streams
+    cudaStreamCreate(&stream_hd0);
+    cudaStreamCreate(&stream_hd1);
+    cudaStreamCreate(&stream_dh0);
 
     struct timespec start, end; //timestamps
     struct timespec t_start, t_end; //timestamps
@@ -96,6 +101,7 @@ int main(int argc, char **argv)
     uint64_t total_bp = 0;
     uint64_t total_fd = 0;
 
+    // Start timer
     clock_gettime(CLOCK_MONOTONIC, &t_start);
 
 
@@ -126,6 +132,7 @@ int main(int argc, char **argv)
 
     clock_gettime(CLOCK_MONOTONIC, &t_end);
 
+
     float total_rt = get_dt(&t_start, &t_end);
     printf("RT: %f secs\n", total_rt/BILLION);
     float rt = (float)(total_bp + total_ff + total_fd);
@@ -135,12 +142,11 @@ int main(int argc, char **argv)
     freeMatrices();
 
     free(LAYER_SIZES);
-
 }
 
-
 // starting is included; ending is not
-void readXY() {
+void readXY()
+{
     char buffer[2048];
     char *record, *line;
     int i, j;
@@ -191,17 +197,15 @@ void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs)
 }
 
 
-float testAccuracy(int testSize)
-{
+float testAccuracy(int testSize) {
     // Get the output
     Matrix *testOut = feedForward(testX);
 
     // Get the error
     Matrix *delta = matrixMatrixElementSub(testOut, testY);
 
-    //Matrix *trans = matrixTranspose(delta);
-    //printMatrix(trans);
-    //freeMatrix(trans);
+    Matrix *trans = matrixTranspose(delta);
+    freeMatrix(trans);
 
     float error = matrixReduceSumPow(delta, 2);
     printf("Error: %f\n", error);
@@ -212,7 +216,7 @@ float testAccuracy(int testSize)
     return error;
 }
 
-/*
+
 Matrix *feedForward(Matrix *in)
 {
     int wts_max = 0; //find max number of elements
@@ -244,8 +248,11 @@ Matrix *feedForward(Matrix *in)
     int wts_rows = WTS[0]->rows;
 
     // this will load in transposed
-    cublasSetMatrix(in->cols, in->rows, sizeof(float),
-            in->m, in->cols, dev_in, in->cols);
+    cublasSetMatrixAsync(in->cols, in->rows, sizeof(float),
+            in->m, in->cols, dev_in, in->cols, stream_hd0);
+
+    // set to our stream
+    cublasSetStream(handle, stream_hd0);
 
     for (int layer = 0; layer < NUM_LAYERS; layer++) {
 
@@ -258,9 +265,8 @@ Matrix *feedForward(Matrix *in)
         }
 
         // Load WTS[layer]  transposed
-        cublasSetMatrix(wts_cols, wts_rows, sizeof(float),
-                WTS[layer]->m, wts_cols, dev_wts, wts_cols);
-
+        cublasSetMatrixAsync(wts_cols, wts_rows, sizeof(float),
+                WTS[layer]->m, wts_cols, dev_wts, wts_cols, stream_hd0);
 
         // multiply
         cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T,
@@ -276,9 +282,10 @@ Matrix *feedForward(Matrix *in)
 
         //printf("Launching kernel with dim y: %d, dim x: %d\n", UINT_DIV_CEIL(wts_cols, dimBlock.x), UINT_DIV_CEIL(in_rows , dimBlock.y));
 
-        cuda_matirxElementSigmoid<<<blocks, BLOCK_SIZE>>>(dev_z, in_rows, wts_cols);
+        cuda_matirxElementSigmoid<<<blocks, BLOCK_SIZE, 0, stream_hd0>>>(dev_z, in_rows, wts_cols);
 
 
+        cudaStreamSynchronize(stream_dh0); //Make sure the copy to host buffer is clear
 
         // stupid transpose to put it into col ordering
         // dev_z is dev_z[in_rows][wts_cols] (stored in row ordering on device)
@@ -286,8 +293,12 @@ Matrix *feedForward(Matrix *in)
         cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, wts_cols, in_rows, &alpha,
                 dev_z, in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
 
+        // wait till done transposing so we can start async copy back to host
+        cudaStreamSynchronize(stream_hd0);
+
         // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
-        cudaMemcpy(ZTS[layer]->m, dev_z_trans, in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost); //eventually make async
+        cudaMemcpyAsync(ZTS[layer]->m, dev_z_trans,
+            in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost, stream_dh0); //eventually make async
 
         //swap
         float *tmp = dev_in;
@@ -303,6 +314,9 @@ Matrix *feedForward(Matrix *in)
     cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, wts_cols, in_rows, &alpha, dev_z,
         in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
 
+    cudaStreamSynchronize(stream_dh0);
+    cudaStreamSynchronize(stream_hd0);
+
     // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
     cudaMemcpy(z->m, dev_z_trans, in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost); //eventually make async
 
@@ -315,34 +329,9 @@ Matrix *feedForward(Matrix *in)
     // feed through last layer
     return z;
 }
-*/
-
-Matrix *feedForward(Matrix *in) {
-    Matrix *z = NULL;
-    for (int layer = 0; layer < NUM_LAYERS; layer++) {
-        // Multiply Z with W to get S
-        z = matrixMatrixMultiply(in, WTS[layer]);
-
-        // Note that the output perceptrons do not have activation function
-        if (layer == NUM_LAYERS - 1) break;
-
-        // Apply activation function to S to get Z
-        matrixElementApply(z, sigmoid);
-
-        // Save Z because this is sigmoid(S) and is needed in back propagation
-        ZTS[layer] = z;
-
-        // Update values for next iteration
-        in = z;
-    }
-
-    return z;
-}
 
 
-void backPropagation(Matrix *estimation)
-{
-
+void backPropagation(Matrix *estimation) {
     // Backprop
     Matrix **D = (Matrix **)malloc(NUM_LAYERS * sizeof(Matrix *));
 
@@ -392,18 +381,14 @@ void backPropagation(Matrix *estimation)
 }
 
 
-
-void initializeMatrices(int testSize)
-{
+void initializeMatrices(int testSize) {
     // Get all data from csv
     XALL = newMatrix(TOTAL, FEATURES);
     YALL = newMatrix(TOTAL, 1);
     readXY();
 
-	// Create input
+	// Create input and output matrix for batch
     XTS = newMatrixSub(N, FEATURES);
-
-	// Create output
     YTS = newMatrixSub(N, 1);
 
     // Create weight matrices
@@ -413,22 +398,21 @@ void initializeMatrices(int testSize)
 
         WTS[i] = newMatrix(numRows, LAYER_SIZES[i]);
 
-        // The in->firstHidden and lastHidden->out have weights of 1
+        // The in->firstHidden and lastHidden->out initially have weights of 0 and 1
         if (i == 0) {
             matrixElementApply(WTS[i], setTo0);
         } else if (i == NUM_LAYERS-1) {
             matrixElementApply(WTS[i], setTo1);
-            //WTS[i]->m[IDXM(WTS[i],0,0)] = 1;
         } else {
             matrixElementApply(WTS[i], setToRand);
         }
-
     }
 
-    // Create S matrices
+    // Create S matrices, must be page locked
     ZTS = (Matrix **)malloc((NUM_LAYERS - 1) * sizeof(Matrix **));
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
-        ZTS[i] = newMatrix(N, LAYER_SIZES[i]);
+        ZTS[i] = newMatrixSub(N, LAYER_SIZES[i]);
+        cudaMallocHost(&(ZTS[i]->m), ZTS[i]->rows*ZTS[i]->rows*sizeof(float));
     }
 
     // Get test data
@@ -437,16 +421,14 @@ void initializeMatrices(int testSize)
 
     // Retrieve test data from csv
     getXY(TOTAL-testSize, TOTAL, testX, testY);
+
 }
 
-
-void freeMatrices()
-{
+void freeMatrices() {
     // Free X, Y
     freeMatrix(XALL);
     freeMatrix(YALL);
 
-    // Free X, Y
     freeMatrix(XTS);
     freeMatrix(YTS);
 
@@ -458,6 +440,7 @@ void freeMatrices()
 
     // Free Z matrix
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
+        cudaFreeHost(ZTS[i]->m);
         freeMatrix(ZTS[i]);
     }
     free(ZTS);
@@ -467,22 +450,13 @@ void freeMatrices()
 }
 
 
-void printVector(float *vector, int len)
-{
-	printf("------------------------------------\n");
-	int i;
-	for (i = 0; i < len; i++) {
-		printf("%f\n", vector[i]);
-	}
-	printf("------------------------------------\n");
-}
-
 
 
 uint64_t get_dt(struct timespec *start, struct timespec *end)
 {
     return BILLION*(end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec);
 }
+
 
 
 __global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols)
