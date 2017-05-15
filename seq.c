@@ -105,10 +105,11 @@ int main(int argc, char **argv) {
             clock_gettime(CLOCK_MONOTONIC, &end);
             total_bp += get_dt(&start, &end);
 
-            stop = (testAccuracy(testSize) < ERROR_THRESHOLD);
-
             freeMatrix(out);
         }
+        float err = testAccuracy(testSize);
+        stop = (err < ERROR_THRESHOLD);
+        printf("Error: %f\n", err);
     }
 
     clock_gettime(CLOCK_MONOTONIC, &t_end);
@@ -185,7 +186,6 @@ float testAccuracy(int testSize) {
     freeMatrix(trans);
 
     float error = matrixReduceSumPow(delta, 2);
-    printf("Error: %f\n", error);
 
     freeMatrix(delta);
     freeMatrix(testOut);
