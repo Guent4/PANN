@@ -251,6 +251,9 @@ Matrix *feedForward(Matrix *in)
     cublasSetMatrixAsync(in->cols, in->rows, sizeof(float),
             in->m, in->cols, dev_in, in->cols, stream_hd0);
 
+    // set to our stream
+    cublasSetStream(handle, stream_hd0);
+
     for (int layer = 0; layer < NUM_LAYERS; layer++) {
 
         wts_cols = WTS[layer]->cols;
@@ -264,9 +267,6 @@ Matrix *feedForward(Matrix *in)
         // Load WTS[layer]  transposed
         cublasSetMatrixAsync(wts_cols, wts_rows, sizeof(float),
                 WTS[layer]->m, wts_cols, dev_wts, wts_cols, stream_hd0);
-
-        // set to our stream
-        cublasSetStream(handle, stream_hd0);
 
         // multiply
         cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T,
@@ -308,13 +308,14 @@ Matrix *feedForward(Matrix *in)
         // update col dims
         in_cols = wts_cols;
     }
-    cudaStreamSynchronize(stream_dh0);
-    cudaStreamSynchronize(stream_hd0);
 
     Matrix *z = newMatrix(in_rows, WTS[NUM_LAYERS-1]->cols);
 
     cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, wts_cols, in_rows, &alpha, dev_z,
         in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
+
+    cudaStreamSynchronize(stream_dh0);
+    cudaStreamSynchronize(stream_hd0);
 
     // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
     cudaMemcpy(z->m, dev_z_trans, in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost); //eventually make async
