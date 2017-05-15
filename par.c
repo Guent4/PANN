@@ -88,6 +88,11 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
+    int name_len;
+    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    MPI_Get_processor_name(processor_name, &name_len);
+    printf("Node '%s' (rank %d) online and reporting for duty!\n", processor_name, myrank);
+
     initializeMatrices(testSize);
 
     // init cublas
@@ -108,7 +113,7 @@ int main(int argc, char **argv) {
 
     int blocks_proc = ((TOTAL - testSize)/N)/nprocs;
 
-    for (int outer = 0; outer < 100; outer++) {
+    for (int outer = 0; outer < 10000; outer++) {
         for (int iter = blocks_proc*myrank; iter < blocks_proc*(myrank+1); iter++) {
             // Retrieve data from csv
             clock_gettime(CLOCK_MONOTONIC, &start);

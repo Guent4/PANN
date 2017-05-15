@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 
 
     bool stop = false;
-    for (int outer = 0; outer < 100 && !stop; outer++) {
+    for (int outer = 0; outer < 10000 && !stop; outer++) {
         for (int iter = 0; iter < (TOTAL - testSize)/N && !stop; iter++) {
             // Retrieve data from csv
             clock_gettime(CLOCK_MONOTONIC, &start);
