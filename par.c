@@ -9,6 +9,8 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
+#include <mpi.h>
+
 
 #include "matrix.h"
 #include "pfeed_forward.h"
@@ -27,6 +29,7 @@ void getXY(int starting, int ending, Matrix *inputs, Matrix *outputs);
 void initializeMatrices(int testSize);
 uint64_t get_dt(struct timespec *start, struct timespec *end);
 void freeMatrices();
+void mpi_avg_weights();
 
 // public
 cublasHandle_t handle;
@@ -50,6 +53,9 @@ static Matrix *YTS;
 
 static Matrix *testX;
 static Matrix *testY;
+
+//for mpi
+static int myrank, nprocs;
 
 //public
 Matrix **WTS;
@@ -77,6 +83,11 @@ int main(int argc, char **argv) {
     }
     LAYER_SIZES[NUM_LAYERS - 1] = 1; // This has to be 1
 
+    //init mpi
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+
     initializeMatrices(testSize);
 
     // init cublas
@@ -95,10 +106,10 @@ int main(int argc, char **argv) {
     // Start timer
     clock_gettime(CLOCK_MONOTONIC, &t_start);
 
+    int blocks_proc = ((TOTAL - testSize)/N)/nprocs;
 
-    bool stop = false;
-    for (int outer = 0; outer < 100 && !stop; outer++) {
-        for (int iter = 0; iter < (TOTAL - testSize)/N && !stop; iter++) {
+    for (int outer = 0; outer < 100; outer++) {
+        for (int iter = blocks_proc*myrank; iter < blocks_proc*(myrank+1); iter++) {
             // Retrieve data from csv
             clock_gettime(CLOCK_MONOTONIC, &start);
             getXY(iter*N, iter*N + N, XTS, YTS);
@@ -115,10 +126,19 @@ int main(int argc, char **argv) {
             clock_gettime(CLOCK_MONOTONIC, &end);
             total_bp += get_dt(&start, &end);
 
-            stop = (testAccuracy(testSize) < ERROR_THRESHOLD);
+            //stop = (testAccuracy(testSize) < ERROR_THRESHOLD);
 
             freeMatrix(out);
         }
+        mpi_avg_weights();
+        // see if done
+        float err = testAccuracy(testSize);
+        if (!myrank)
+            printf("Error: %f\n", err);
+
+        if (testAccuracy(testSize) < ERROR_THRESHOLD)
+            break;
+
     }
 
     clock_gettime(CLOCK_MONOTONIC, &t_end);
@@ -133,6 +153,8 @@ int main(int argc, char **argv) {
     freeMatrices();
 
     free(LAYER_SIZES);
+
+    MPI_Finalize();
 }
 
 // starting is included; ending is not
@@ -199,7 +221,6 @@ float testAccuracy(int testSize) {
     freeMatrix(trans);
 
     float error = matrixReduceSumPow(delta, 2);
-    printf("Error: %f\n", error);
 
     freeMatrix(delta);
     freeMatrix(testOut);
@@ -290,7 +311,7 @@ void initializeMatrices(int testSize) {
     ZTS = (Matrix **)malloc((NUM_LAYERS - 1) * sizeof(Matrix **));
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
         ZTS[i] = newMatrixSub(N, LAYER_SIZES[i]);
-        cudaMallocHost(&(ZTS[i]->m), ZTS[i]->rows*ZTS[i]->rows*sizeof(float));
+        cudaMallocHost((void**)(&(ZTS[i]->m)), ZTS[i]->rows*ZTS[i]->rows*sizeof(float));
     }
 
     // Get test data
@@ -333,4 +354,25 @@ void freeMatrices() {
 uint64_t get_dt(struct timespec *start, struct timespec *end)
 {
     return BILLION*(end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec);
+}
+
+
+
+void mpi_avg_weights()
+{
+
+    for (int i = 0; i < NUM_LAYERS; i++) {
+        uint32_t num = (WTS[i]->cols)*(WTS[i]->rows);
+        float *recv = malloc(num*sizeof(float));
+        // send results
+        MPI_Allreduce( WTS[i]->m, recv, num,
+        MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+
+        // update weights
+        memcpy(WTS[i]->m, recv, num*sizeof(float));
+        //avg
+        float mult = 1.0/nprocs;
+        matrixElementApplyArg(WTS[i], multByConst, &mult);
+    }
+
 }
