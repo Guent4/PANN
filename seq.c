@@ -17,6 +17,7 @@
 #include <float.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "matrix.h"
 
@@ -74,8 +75,43 @@ int main(int argc, char **argv) {
 
     initializeMatrices(testSize);
 
+    struct timespec start, end; //timestamps
+    struct timespec t_start, t_end; //timestamps
+    uint64_t total_ff = 0;
+    uint64_t total_bp = 0;
+    uint64_t total_fd = 0;
+
     // Start timer
     clock_gettime(CLOCK_MONOTONIC, &t_start);
+
+
+    bool stop = false;
+    for (int outer = 0; outer < 100 && !stop; outer++) {
+        for (int iter = 0; iter < (TOTAL - testSize)/N && !stop; iter++) {
+            // Retrieve data from csv
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            getXY(iter*N, iter*N + N, XTS, YTS);
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            total_fd += get_dt(&start, &end);
+
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            Matrix *out = feedForward(XTS);
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            total_ff += get_dt(&start, &end);
+
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            backPropagation(out);
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            total_bp += get_dt(&start, &end);
+
+            stop = (testAccuracy(testSize) < ERROR_THRESHOLD);
+
+            freeMatrix(out);
+        }
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &t_end);
+
 
     float total_rt = get_dt(&t_start, &t_end);
     printf("RT: %f secs\n", total_rt/BILLION);
@@ -295,4 +331,10 @@ void freeMatrices() {
 
     freeMatrix(testY);
     freeMatrix(testX);
+}
+
+
+uint64_t get_dt(struct timespec *start, struct timespec *end)
+{
+    return BILLION*(end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec);
 }

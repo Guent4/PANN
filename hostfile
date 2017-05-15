@@ -1,0 +1,4 @@
+en-openmpi04 slots=1 max-slots=1
+en-openmpi05 slots=1 max-slots=1
+en-openmpi06 slots=1 max-slots=1
+en-openmpi07 slots=1 max-slots=1

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <float.h>
-
+#include <stdbool.h>
 
 // i is row j is col
 #define IDXM(M, I, J) ((I)*((M)->cols) + (J))
@@ -14,7 +14,7 @@ typedef struct {
     int rows;
     int cols;
     float *m;
-    int subMatrix;
+    bool subMatrix;
 } Matrix;
 
 #ifdef __cplusplus

@@ -13,16 +13,17 @@ Matrix *newMatrix(int m, int n)
     A->m = (float *)malloc(sizeof(float[m][n]));
     A->rows = m;
     A->cols = n;
-    A->subMatrix = 0;
+    A->subMatrix = false;
     return A;
 }
 
 Matrix *newMatrixSub(int m, int n)
 {
     Matrix *A = (Matrix *)malloc(sizeof(Matrix));
+    A->m = NULL;
     A->rows = m;
     A->cols = n;
-    A->subMatrix = 1;
+    A->subMatrix = true;
     return A;
 }
 

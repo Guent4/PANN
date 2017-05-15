@@ -38,6 +38,9 @@ void freeMatrices();
 __global__ void cuda_matirxElementSigmoid(float* A, int rows, int cols);
 static cublasHandle_t handle;
 static cublasStatus_t stat;
+static cudaStream_t stream_hd0;
+static cudaStream_t stream_hd1;
+static cudaStream_t stream_dh0;
 
 
 static int N;
@@ -86,6 +89,11 @@ int main(int argc, char **argv) {
         printf ("CUBLAS initialization failed\n");
         exit(1);
     }
+
+    // create our streams
+    cudaStreamCreate(&stream_hd0);
+    cudaStreamCreate(&stream_hd1);
+    cudaStreamCreate(&stream_dh0);
 
     struct timespec start, end; //timestamps
     struct timespec t_start, t_end; //timestamps
@@ -240,8 +248,8 @@ Matrix *feedForward(Matrix *in)
     int wts_rows = WTS[0]->rows;
 
     // this will load in transposed
-    cublasSetMatrix(in->cols, in->rows, sizeof(float),
-            in->m, in->cols, dev_in, in->cols);
+    cublasSetMatrixAsync(in->cols, in->rows, sizeof(float),
+            in->m, in->cols, dev_in, in->cols, stream_hd0);
 
     for (int layer = 0; layer < NUM_LAYERS; layer++) {
 
@@ -254,9 +262,11 @@ Matrix *feedForward(Matrix *in)
         }
 
         // Load WTS[layer]  transposed
-        cublasSetMatrix(wts_cols, wts_rows, sizeof(float),
-                WTS[layer]->m, wts_cols, dev_wts, wts_cols);
+        cublasSetMatrixAsync(wts_cols, wts_rows, sizeof(float),
+                WTS[layer]->m, wts_cols, dev_wts, wts_cols, stream_hd0);
 
+        // set to our stream
+        cublasSetStream(handle, stream_hd0);
 
         // multiply
         cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T,
@@ -272,9 +282,10 @@ Matrix *feedForward(Matrix *in)
 
         //printf("Launching kernel with dim y: %d, dim x: %d\n", UINT_DIV_CEIL(wts_cols, dimBlock.x), UINT_DIV_CEIL(in_rows , dimBlock.y));
 
-        cuda_matirxElementSigmoid<<<blocks, BLOCK_SIZE>>>(dev_z, in_rows, wts_cols);
+        cuda_matirxElementSigmoid<<<blocks, BLOCK_SIZE, 0, stream_hd0>>>(dev_z, in_rows, wts_cols);
 
 
+        cudaStreamSynchronize(stream_dh0); //Make sure the copy to host buffer is clear
 
         // stupid transpose to put it into col ordering
         // dev_z is dev_z[in_rows][wts_cols] (stored in row ordering on device)
@@ -282,8 +293,12 @@ Matrix *feedForward(Matrix *in)
         cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, wts_cols, in_rows, &alpha,
                 dev_z, in_rows, &beta, dev_z, wts_cols, dev_z_trans, wts_cols);
 
+        // wait till done transposing so we can start async copy back to host
+        cudaStreamSynchronize(stream_hd0);
+
         // now dev_z is WTS[layer]->cols x in->rows (stored in row ordering on device)
-        cudaMemcpy(ZTS[layer]->m, dev_z_trans, in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost); //eventually make async
+        cudaMemcpyAsync(ZTS[layer]->m, dev_z_trans,
+            in_rows*wts_cols*sizeof(float), cudaMemcpyDeviceToHost, stream_dh0); //eventually make async
 
         //swap
         float *tmp = dev_in;
@@ -293,6 +308,8 @@ Matrix *feedForward(Matrix *in)
         // update col dims
         in_cols = wts_cols;
     }
+    cudaStreamSynchronize(stream_dh0);
+    cudaStreamSynchronize(stream_hd0);
 
     Matrix *z = newMatrix(in_rows, WTS[NUM_LAYERS-1]->cols);
 
@@ -390,10 +407,11 @@ void initializeMatrices(int testSize) {
         }
     }
 
-    // Create S matrices
+    // Create S matrices, must be page locked
     ZTS = (Matrix **)malloc((NUM_LAYERS - 1) * sizeof(Matrix **));
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
-        ZTS[i] = newMatrix(N, LAYER_SIZES[i]);
+        ZTS[i] = newMatrixSub(N, LAYER_SIZES[i]);
+        cudaMallocHost(&(ZTS[i]->m), ZTS[i]->rows*ZTS[i]->rows*sizeof(float));
     }
 
     // Get test data
@@ -421,6 +439,7 @@ void freeMatrices() {
 
     // Free Z matrix
     for (int i = 0; i < NUM_LAYERS - 1; i++) {
+        cudaFreeHost(ZTS[i]->m);
         freeMatrix(ZTS[i]);
     }
     free(ZTS);
